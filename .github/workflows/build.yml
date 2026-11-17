@@ -1,0 +1,58 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      ytdlp_version:
+        description: "yt-dlp version (khaali = PyPI latest)"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Chaquopy build ke liye host Python (target Python 3.11 se match)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: Resolve yt-dlp version
+        run: |
+          V="${{ github.event.inputs.ytdlp_version }}"
+          if [ -z "$V" ]; then
+            V=$(curl -fsS https://pypi.org/pypi/yt-dlp/json | python -c "import sys,json;print(json.load(sys.stdin)['info']['version'])")
+          fi
+          echo "YTDLP_VERSION=$V" >> "$GITHUB_ENV"
+          echo "Using yt-dlp $V"
+
+      - name: Build debug APK
+        run: gradle :app:assembleDebug -PytdlpVersion="$YTDLP_VERSION" --stacktrace
+
+      - name: Write build info
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/debug/app-debug.apk out/chaman-downloader-debug.apk
+          {
+            echo "commit: $GITHUB_SHA"
+            echo "yt-dlp: $YTDLP_VERSION"
+            echo "agp: 8.5.2 | kotlin: 1.9.24 | chaquopy: 16.0.0 | python: 3.11 | gradle: 8.7"
+          } > out/BUILD_INFO.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chaman-downloader-debug
+          path: out/
