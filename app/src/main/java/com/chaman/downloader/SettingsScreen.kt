@@ -41,7 +41,8 @@ import androidx.lifecycle.LifecycleEventObserver
 fun SettingsScreen(
     mode: ThemeMode,
     onMode: (ThemeMode) -> Unit,
-    onOpenDebug: () -> Unit
+    onOpenDebug: () -> Unit,
+    onOpenWelcome: () -> Unit
 ) {
     val ctx = LocalContext.current
     val cs = MaterialTheme.colorScheme
@@ -138,7 +139,15 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text("Version $version", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-            Text("Made by Najeef", style = MaterialTheme.typography.bodyMedium, color = cs.primary)
+            Text(
+                "Made by Najeef",
+                style = MaterialTheme.typography.bodyMedium,
+                color = cs.primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onOpenWelcome() }
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+            )
         }
     }
 }

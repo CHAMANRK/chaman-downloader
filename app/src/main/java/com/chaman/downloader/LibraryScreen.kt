@@ -614,28 +614,10 @@ fun LibraryScreen(active: Boolean) {
                     }
                 }
             } else if (loaded && files.isEmpty()) {
-                item {
-                    LuxCard {
-                        Text("Abhi koi file nahi", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Download complete hote hi file yahan aa jayegi.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = cs.onSurfaceVariant
-                        )
-                    }
-                }
+                item { EmptyState(iconIndex = 2, title = "Library khali") }
             }
             if (error == null && files.isNotEmpty() && shown.isEmpty()) {
-                item {
-                    LuxCard {
-                        Text("Koi match nahi", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Search ya filter badal ke dekho.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = cs.onSurfaceVariant
-                        )
-                    }
-                }
+                item { EmptyState(iconIndex = 2, title = "Koi match nahi") }
             }
             items(shown, key = { it.id }) { f ->
                 val isSel = f.id in selected

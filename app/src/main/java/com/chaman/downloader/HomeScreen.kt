@@ -283,7 +283,7 @@ fun HomeScreen(
 
             if (busy) {
                 Text(
-                    "Ek download chal raha hai. Queue me dekho.",
+                    "Ek download chal raha hai",
                     style = MaterialTheme.typography.bodyMedium,
                     color = cs.onSurfaceVariant
                 )

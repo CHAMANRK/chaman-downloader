@@ -21,6 +21,7 @@ enum class ThemeMode { SYSTEM, DARK, AMOLED, LIGHT }
 object Prefs {
     private const val FILE = "chaman"
     private const val KEY_THEME = "theme"
+    private const val KEY_WELCOME = "welcome_done"
 
     fun theme(ctx: Context): ThemeMode {
         val v = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_THEME, null)
@@ -29,6 +30,13 @@ object Prefs {
         } catch (e: IllegalArgumentException) {
             ThemeMode.SYSTEM
         }
+    }
+
+    fun welcomeDone(ctx: Context): Boolean =
+        ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).getBoolean(KEY_WELCOME, false)
+
+    fun setWelcomeDone(ctx: Context) {
+        ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putBoolean(KEY_WELCOME, true).apply()
     }
 
     fun setTheme(ctx: Context, m: ThemeMode) {

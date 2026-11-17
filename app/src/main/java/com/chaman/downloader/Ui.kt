@@ -3,6 +3,8 @@ package com.chaman.downloader
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -92,5 +94,28 @@ fun PageTitle(title: String, sub: String = "") {
         if (sub.isNotBlank()) {
             Text(sub, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+/** Khali screen: sirf icon + ek chhoti line. Hint text nahi (user ka rule). index = NavIcon index. */
+@Composable
+fun EmptyState(iconIndex: Int, title: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 72.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        NavIcon(
+            index = iconIndex,
+            tint = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(56.dp)
+        )
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

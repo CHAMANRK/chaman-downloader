@@ -126,7 +126,13 @@ fun ChamanApp(activity: ComponentActivity) {
     ChamanTheme(dark, amoled = mode == ThemeMode.AMOLED) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             var showDebug by rememberSaveable { mutableStateOf(false) }
-            if (showDebug) {
+            var showWelcome by rememberSaveable { mutableStateOf(!Prefs.welcomeDone(ctx)) }
+            if (showWelcome) {
+                WelcomeScreen(onDone = {
+                    Prefs.setWelcomeDone(ctx)
+                    showWelcome = false
+                })
+            } else if (showDebug) {
                 BackHandler { showDebug = false }
                 Column(
                     modifier = Modifier
@@ -146,7 +152,8 @@ fun ChamanApp(activity: ComponentActivity) {
                         mode = it
                         Prefs.setTheme(ctx, it)
                     },
-                    onOpenDebug = { showDebug = true }
+                    onOpenDebug = { showDebug = true },
+                    onOpenWelcome = { showWelcome = true }
                 )
             }
         }
@@ -155,7 +162,7 @@ fun ChamanApp(activity: ComponentActivity) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug: () -> Unit) {
+private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug: () -> Unit, onOpenWelcome: () -> Unit) {
     val ctx = LocalContext.current
     val cs = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
@@ -232,7 +239,7 @@ private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug:
                     )
                     1 -> QueueScreen(onOpenLibrary = { goTo(2) })
                     2 -> LibraryScreen(active = pagerState.currentPage == 2)
-                    else -> SettingsScreen(mode = mode, onMode = onMode, onOpenDebug = onOpenDebug)
+                    else -> SettingsScreen(mode = mode, onMode = onMode, onOpenDebug = onOpenDebug, onOpenWelcome = onOpenWelcome)
                 }
             }
         }

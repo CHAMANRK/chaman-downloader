@@ -44,14 +44,7 @@ fun QueueScreen(onOpenLibrary: () -> Unit) {
         PageTitle("Queue")
 
         if (st == DlStatus.IDLE) {
-            LuxCard {
-                Text("Kuch nahi chal raha", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Home se link daalo, download yahan dikhega.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = cs.onSurfaceVariant
-                )
-            }
+            EmptyState(iconIndex = 1, title = "Queue khali")
         } else {
             LuxCard {
                 Text(
