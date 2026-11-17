@@ -14,6 +14,7 @@ import android.os.PowerManager
 import android.provider.MediaStore
 import com.chaquo.python.PyException
 import com.chaquo.python.Python
+import org.json.JSONObject
 import java.io.File
 
 /** Python side is object ko call karta hai (progress + cancel check). */
@@ -99,10 +100,26 @@ class DownloadService : Service() {
         worker = Thread {
             val outDir = File(filesDir, "dl").apply { mkdirs() }
             try {
-                val path = Python.getInstance().getModule("tests")
-                    .callAttr("download", url, outDir.absolutePath, cb).toString()
-                val src = File(path)
-                DownloadState.logLine("download done: ${src.name} (${src.length()} bytes), MediaStore me save")
+                val json = JSONObject(
+                    Python.getInstance().getModule("tests")
+                        .callAttr("download", url, outDir.absolutePath, cb).toString()
+                )
+                DownloadState.logLine("formats: ${json.getString("desc")}")
+                val parts = json.getJSONArray("files")
+                val src: File
+                if (parts.length() == 2) {
+                    val v = File(parts.getString(0))
+                    val a = File(parts.getString(1))
+                    DownloadState.logLine("download done: video ${v.length()} B, audio ${a.length()} B. FFmpeg merge...")
+                    DownloadState.line = "Merging video + audio..."
+                    src = File(outDir, json.getString("id") + "." + json.getString("merge_ext"))
+                    FfmpegProbe.merge(v, a, src)
+                    v.delete()
+                    a.delete()
+                } else {
+                    src = File(parts.getString(0))
+                }
+                DownloadState.logLine("ready: ${src.name} (${src.length()} bytes), MediaStore me save")
                 saveToDownloads(src)
                 val secs = (System.currentTimeMillis() - DownloadState.startedAt) / 1000
                 DownloadState.logLine("PASS in ${secs}s -> Download/Chaman/${src.name}")

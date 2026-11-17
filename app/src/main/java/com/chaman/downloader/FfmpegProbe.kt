@@ -28,6 +28,16 @@ object FfmpegProbe {
         return logs.lineSequence().firstOrNull { it.startsWith("ffmpeg version") } ?: logs.take(300)
     }
 
+    /** Video + audio ko bina re-encode ke ek file me jodna (-c copy). */
+    fun merge(video: File, audio: File, out: File) {
+        out.delete()
+        val flags = if (out.extension.equals("mp4", ignoreCase = true)) " -movflags +faststart" else ""
+        val cmd = "-y -i \"${video.absolutePath}\" -i \"${audio.absolutePath}\" -c copy$flags \"${out.absolutePath}\""
+        val (ok, logs) = exec(cmd)
+        check(ok) { "merge fail:\n" + logs.takeLast(800) }
+        check(out.exists() && out.length() > 0) { "merge ke baad file nahi bani ya khaali hai" }
+    }
+
     fun convert(cacheDir: File): String {
         val out = File(cacheDir, "probe_tone.m4a")
         out.delete()
