@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       ytdlp_version:
-        description: "yt-dlp version (khaali = PyPI latest)"
+        description: "yt-dlp version override (khaali = gradle.properties ka pinned version)"
         required: false
         default: ""
 
@@ -31,13 +31,20 @@ jobs:
           gradle-version: "8.7"
 
       - name: Resolve yt-dlp version
+        env:
+          INPUT_YTDLP: ${{ github.event.inputs.ytdlp_version }}
         run: |
-          V="${{ github.event.inputs.ytdlp_version }}"
+          V="$INPUT_YTDLP"
           if [ -z "$V" ]; then
-            V=$(curl -fsS https://pypi.org/pypi/yt-dlp/json | python -c "import sys,json;print(json.load(sys.stdin)['info']['version'])")
+            V=$(grep '^ytdlpVersion=' gradle.properties | cut -d= -f2)
           fi
           echo "YTDLP_VERSION=$V" >> "$GITHUB_ENV"
-          echo "Using yt-dlp $V"
+          LATEST=$(curl -fsS https://pypi.org/pypi/yt-dlp/json | python -c "import sys,json;print(json.load(sys.stdin)['info']['version'])" || echo unknown)
+          echo "YTDLP_LATEST=$LATEST" >> "$GITHUB_ENV"
+          echo "Using yt-dlp $V (PyPI latest abhi: $LATEST)"
+
+      - name: Unit tests
+        run: gradle :app:testDebugUnitTest -PytdlpVersion="$YTDLP_VERSION" --stacktrace
 
       - name: Build debug APK
         run: gradle :app:assembleDebug -PytdlpVersion="$YTDLP_VERSION" --stacktrace
@@ -48,10 +55,12 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk out/chaman-downloader-debug.apk
           {
             echo "commit: $GITHUB_SHA"
-            echo "yt-dlp: $YTDLP_VERSION"
+            echo "yt-dlp: $YTDLP_VERSION (PyPI latest at build time: $YTDLP_LATEST)"
             grep '^ffmpegkitVersion' gradle.properties | sed 's/ffmpegkitVersion=/ffmpegkit: /'
-            echo "agp: 8.5.2 | kotlin: 1.9.24 | chaquopy: 16.0.0 | python: 3.11 | gradle: 8.7"
+            echo "agp: 8.5.2 | kotlin: 1.9.24 | chaquopy: 16.0.0 | python: 3.11 | gradle: 8.7 | jdk: 17"
+            echo "actions: checkout@v4 setup-java@v4 setup-python@v5 setup-gradle@v4 upload-artifact@v4"
           } > out/BUILD_INFO.txt
+          cat out/BUILD_INFO.txt
 
       - uses: actions/upload-artifact@v4
         with:

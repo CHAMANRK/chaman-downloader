@@ -13,10 +13,10 @@ android {
 
     defaultConfig {
         applicationId = "com.chaman.downloader"
-        minSdk = 24
+        minSdk = 29 // MediaStore.Downloads (scoped storage) ke liye Android 10+
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.2.0-phase0b"
+        versionCode = 3
+        versionName = "0.3.0-phase0c"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -56,4 +56,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     // Community-maintained FFmpegKit fork (LGPL). Phase 0 me test ho raha hai.
     implementation("dev.ffmpegkit-maintained:ffmpeg:$ffmpegkitVersion")
+
+    testImplementation("junit:junit:4.13.2")
 }
