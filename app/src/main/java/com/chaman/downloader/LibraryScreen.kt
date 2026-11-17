@@ -10,6 +10,33 @@ import android.util.Size
 import android.provider.MediaStore
 import android.widget.Toast
 import android.net.Uri
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
+import android.os.Build
+import android.content.IntentSender
+import android.content.ContentValues
+import android.app.RecoverableSecurityException
+import android.app.Activity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -107,6 +134,74 @@ fun openMediaUri(ctx: Context, uri: Uri, mime: String) {
         ctx.startActivity(i)
     } catch (e: ActivityNotFoundException) {
         Toast.makeText(ctx, "Is file ko kholne wali app nahi mili", Toast.LENGTH_SHORT).show()
+    }
+}
+
+/** Selection mode chalu hai ya nahi (MainShell ka Back isse dekhta hai). */
+object LibrarySelection {
+    var active by androidx.compose.runtime.mutableStateOf(false)
+}
+
+private class NeedsGrant(val sender: IntentSender, val retry: Boolean)
+
+private fun mediaUri(id: Long): Uri = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id)
+
+/** File apni app ki na ho (reinstall ke baad) to system permission popup chahiye. */
+private fun grantFor(ctx: Context, e: SecurityException, uris: List<Uri>, delete: Boolean): NeedsGrant {
+    if (Build.VERSION.SDK_INT >= 30) {
+        val pi = if (delete) MediaStore.createDeleteRequest(ctx.contentResolver, uris)
+        else MediaStore.createWriteRequest(ctx.contentResolver, uris)
+        return NeedsGrant(pi.intentSender, retry = !delete)
+    }
+    if (e is RecoverableSecurityException) {
+        return NeedsGrant(e.userAction.actionIntent.intentSender, retry = true)
+    }
+    throw e
+}
+
+private fun deleteItems(ctx: Context, ids: List<Long>): NeedsGrant? {
+    val denied = ArrayList<Uri>()
+    var first: SecurityException? = null
+    for (id in ids) {
+        val u = mediaUri(id)
+        try {
+            ctx.contentResolver.delete(u, null, null)
+        } catch (e: SecurityException) {
+            denied.add(u)
+            if (first == null) first = e
+        }
+    }
+    val err = first ?: return null
+    return grantFor(ctx, err, denied, true)
+}
+
+private fun renameItem(ctx: Context, id: Long, newName: String): NeedsGrant? {
+    val u = mediaUri(id)
+    val v = ContentValues().apply { put(MediaStore.Downloads.DISPLAY_NAME, newName) }
+    try {
+        val n = ctx.contentResolver.update(u, v, null, null)
+        if (n < 1) throw IllegalStateException("Rename nahi hua")
+        return null
+    } catch (e: SecurityException) {
+        return grantFor(ctx, e, listOf(u), false)
+    }
+}
+
+private fun shareItems(ctx: Context, items: List<LibItem>) {
+    if (items.isEmpty()) return
+    val uris = ArrayList(items.map { mediaUri(it.id) })
+    val i = if (items.size == 1) {
+        Intent(Intent.ACTION_SEND).setType(items[0].mime).putExtra(Intent.EXTRA_STREAM, uris[0])
+    } else {
+        Intent(Intent.ACTION_SEND_MULTIPLE)
+            .setType(commonMime(items.map { it.mime }))
+            .putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+    }
+    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    try {
+        ctx.startActivity(Intent.createChooser(i, "Share"))
+    } catch (e: ActivityNotFoundException) {
+        Toast.makeText(ctx, "Share karne wali app nahi mili", Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -256,12 +351,124 @@ private fun FilterPill(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
+private fun SelectMark(on: Boolean) {
+    val cs = MaterialTheme.colorScheme
+    Box(
+        modifier = Modifier
+            .size(24.dp)
+            .clip(CircleShape)
+            .background(if (on) cs.primary else Color.Transparent)
+            .border(1.5.dp, if (on) cs.primary else cs.outline, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        if (on) {
+            val tick = cs.onPrimary
+            Canvas(modifier = Modifier.size(12.dp)) {
+                val w = size.width
+                val h = size.height
+                val p = Path().apply {
+                    moveTo(w * 0.08f, h * 0.55f)
+                    lineTo(w * 0.4f, h * 0.88f)
+                    lineTo(w * 0.94f, h * 0.14f)
+                }
+                drawPath(p, tick, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ItemMenu(onRename: () -> Unit, onDelete: () -> Unit, onShare: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .clickable { open = true },
+            contentAlignment = Alignment.Center
+        ) {
+            val dot = cs.onSurfaceVariant
+            Canvas(modifier = Modifier.size(width = 4.dp, height = 18.dp)) {
+                val r = 2.dp.toPx()
+                for (k in 0..2) {
+                    drawCircle(dot, r, Offset(size.width / 2f, size.height * (k + 0.5f) / 3f))
+                }
+            }
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text("Rename") }, onClick = { open = false; onRename() })
+            DropdownMenuItem(text = { Text("Delete", color = cs.error) }, onClick = { open = false; onDelete() })
+            DropdownMenuItem(text = { Text("Share") }, onClick = { open = false; onShare() })
+        }
+    }
+}
+
+@Composable
+private fun RenameDialog(item: LibItem, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val parts = remember(item.id) { splitFileName(item.name) }
+    var text by remember(item.id) { mutableStateOf(parts.first) }
+    val newName = renamedFileName(item.name, text)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = cs.surface,
+        title = { Text("Rename") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                singleLine = true,
+                suffix = { Text(parts.second, color = cs.onSurfaceVariant) },
+                shape = MaterialTheme.shapes.medium,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = cs.primary,
+                    unfocusedBorderColor = cs.outline,
+                    cursorColor = cs.primary
+                )
+            )
+        },
+        confirmButton = {
+            TextButton(
+                enabled = newName != null && newName != item.name,
+                onClick = { if (newName != null) onConfirm(newName) }
+            ) { Text("Rename", color = cs.primary) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = cs.onSurfaceVariant) } }
+    )
+}
+
+@Composable
+private fun DeleteDialog(items: List<LibItem>, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = cs.surface,
+        title = { Text("Delete?") },
+        text = {
+            Text(
+                if (items.size == 1) "\"${items[0].name}\" delete ho jayegi. Wapas nahi aayegi."
+                else "${items.size} files delete ho jayengi. Wapas nahi aayengi.",
+                color = cs.onSurfaceVariant
+            )
+        },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Delete", color = cs.error) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = cs.onSurfaceVariant) } }
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
 fun LibraryScreen(active: Boolean) {
     val ctx = LocalContext.current
     val cs = MaterialTheme.colorScheme
+    val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
     var files by remember { mutableStateOf<List<LibItem>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var reloadTick by remember { mutableStateOf(0) }
     val st = DownloadState.status
     val dateFmt = remember { SimpleDateFormat("d MMM yyyy", Locale.getDefault()) }
     val focusManager = LocalFocusManager.current
@@ -272,7 +479,68 @@ fun LibraryScreen(active: Boolean) {
         files.filter { libMatches(it.name, it.mime, query, filter) }
     }
 
-    LaunchedEffect(active, st) {
+    // Selection: sirf dikhne wali (filtered) files par kaam karta hai
+    var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val selItems = shown.filter { it.id in selected }
+    val selecting = selItems.isNotEmpty()
+    var renameTarget by remember { mutableStateOf<LibItem?>(null) }
+    var deleteTargets by remember { mutableStateOf<List<LibItem>>(emptyList()) }
+    var retry by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    LaunchedEffect(selecting, active) { LibrarySelection.active = selecting && active }
+    DisposableEffect(Unit) { onDispose { LibrarySelection.active = false } }
+    LaunchedEffect(active) { if (!active) selected = emptySet() }
+    BackHandler(enabled = selecting && active) { selected = emptySet() }
+
+    fun toggle(id: Long) {
+        selected = if (id in selected) selected - id else selected + id
+    }
+
+    val grantLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r ->
+        val rt = retry
+        retry = null
+        if (r.resultCode == Activity.RESULT_OK) {
+            if (rt != null) rt() else {
+                reloadTick++
+                selected = emptySet()
+            }
+        }
+    }
+
+    fun launchGrant(g: NeedsGrant, then: () -> Unit) {
+        retry = if (g.retry) then else null
+        grantLauncher.launch(IntentSenderRequest.Builder(g.sender).build())
+    }
+
+    fun finished(msg: String) {
+        Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+        reloadTick++
+        selected = emptySet()
+    }
+
+    fun doDelete(ids: List<Long>) {
+        scope.launch {
+            try {
+                val g = withContext(Dispatchers.IO) { deleteItems(ctx, ids) }
+                if (g == null) finished("Delete ho gaya") else launchGrant(g) { doDelete(ids) }
+            } catch (t: Throwable) {
+                Toast.makeText(ctx, errText(t), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    fun doRename(item: LibItem, newName: String) {
+        scope.launch {
+            try {
+                val g = withContext(Dispatchers.IO) { renameItem(ctx, item.id, newName) }
+                if (g == null) finished("Rename ho gaya") else launchGrant(g) { doRename(item, newName) }
+            } catch (t: Throwable) {
+                Toast.makeText(ctx, errText(t), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    LaunchedEffect(active, st, reloadTick) {
         if (active) {
             try {
                 files = withContext(Dispatchers.IO) { queryLibrary(ctx) }
@@ -284,125 +552,208 @@ fun LibraryScreen(active: Boolean) {
         }
     }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding(),
-        contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 120.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item {
-            PageTitle("Library", "Download/Chaman me jo files hain.")
-        }
-        if (error == null && files.isNotEmpty()) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding(),
+            contentPadding = PaddingValues(
+                start = 22.dp, end = 22.dp, top = 20.dp,
+                bottom = if (selecting) 190.dp else 120.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        label = { Text("Search") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = MaterialTheme.shapes.medium,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-                        trailingIcon = if (query.isNotEmpty()) {
-                            {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .clickable { query = "" },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("\u2715", color = cs.onSurfaceVariant, fontSize = 16.sp)
+                PageTitle("Library", "Download/Chaman me jo files hain.")
+            }
+            if (error == null && files.isNotEmpty()) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            label = { Text("Search") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.medium,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+                            trailingIcon = if (query.isNotEmpty()) {
+                                {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(CircleShape)
+                                            .clickable { query = "" },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("\u2715", color = cs.onSurfaceVariant, fontSize = 16.sp)
+                                    }
                                 }
-                            }
-                        } else null,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = cs.primary,
-                            unfocusedBorderColor = cs.outline,
-                            focusedLabelColor = cs.primary,
-                            cursorColor = cs.primary
+                            } else null,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = cs.primary,
+                                unfocusedBorderColor = cs.outline,
+                                focusedLabelColor = cs.primary,
+                                cursorColor = cs.primary
+                            )
                         )
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterPill("All", filter == LibFilter.ALL) { filterName = LibFilter.ALL.name }
-                        FilterPill("Video", filter == LibFilter.VIDEO) { filterName = LibFilter.VIDEO.name }
-                        FilterPill("Audio", filter == LibFilter.AUDIO) { filterName = LibFilter.AUDIO.name }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterPill("All", filter == LibFilter.ALL) { filterName = LibFilter.ALL.name }
+                            FilterPill("Video", filter == LibFilter.VIDEO) { filterName = LibFilter.VIDEO.name }
+                            FilterPill("Audio", filter == LibFilter.AUDIO) { filterName = LibFilter.AUDIO.name }
+                        }
                     }
                 }
             }
-        }
-        if (error != null) {
-            item {
-                LuxCard {
-                    Text("Library nahi khuli", style = MaterialTheme.typography.titleMedium, color = cs.error)
-                    Text(error ?: "", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            if (error != null) {
+                item {
+                    LuxCard {
+                        Text("Library nahi khuli", style = MaterialTheme.typography.titleMedium, color = cs.error)
+                        Text(error ?: "", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    }
                 }
-            }
-        } else if (loaded && files.isEmpty()) {
-            item {
-                LuxCard {
-                    Text("Abhi koi file nahi", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Download complete hote hi file yahan aa jayegi.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = cs.onSurfaceVariant
-                    )
-                }
-            }
-        }
-        if (error == null && files.isNotEmpty() && shown.isEmpty()) {
-            item {
-                LuxCard {
-                    Text("Koi match nahi", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Search ya filter badal ke dekho.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = cs.onSurfaceVariant
-                    )
-                }
-            }
-        }
-        items(shown, key = { it.id }) { f ->
-            val shape = RoundedCornerShape(18.dp)
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(shape)
-                    .clickable {
-                        openMediaUri(
-                            ctx,
-                            ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, f.id),
-                            f.mime
-                        )
-                    },
-                shape = shape,
-                color = cs.surface,
-                border = BorderStroke(1.dp, cs.outlineVariant)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Thumb(f)
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(f.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            } else if (loaded && files.isEmpty()) {
+                item {
+                    LuxCard {
+                        Text("Abhi koi file nahi", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            dateFmt.format(Date(f.dateSec * 1000)),
+                            "Download complete hote hi file yahan aa jayegi.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = cs.onSurfaceVariant
                         )
+                    }
+                }
+            }
+            if (error == null && files.isNotEmpty() && shown.isEmpty()) {
+                item {
+                    LuxCard {
+                        Text("Koi match nahi", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            fmtBytes(f.size.toDouble()),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = cs.primary
+                            "Search ya filter badal ke dekho.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = cs.onSurfaceVariant
                         )
                     }
                 }
             }
+            items(shown, key = { it.id }) { f ->
+                val isSel = f.id in selected
+                val shape = RoundedCornerShape(18.dp)
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(shape)
+                        .combinedClickable(
+                            onClick = {
+                                if (selecting) toggle(f.id) else openMediaUri(ctx, mediaUri(f.id), f.mime)
+                            },
+                            onLongClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                toggle(f.id)
+                            }
+                        ),
+                    shape = shape,
+                    color = if (isSel) lerp(cs.surface, cs.primary, 0.10f) else cs.surface,
+                    border = BorderStroke(
+                        if (isSel) 1.5.dp else 1.dp,
+                        if (isSel) cs.primary else cs.outlineVariant
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Thumb(f)
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(f.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                dateFmt.format(Date(f.dateSec * 1000)),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = cs.onSurfaceVariant
+                            )
+                            Text(
+                                fmtBytes(f.size.toDouble()),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = cs.primary
+                            )
+                        }
+                        if (selecting) {
+                            SelectMark(isSel)
+                        } else {
+                            ItemMenu(
+                                onRename = { renameTarget = f },
+                                onDelete = { deleteTargets = listOf(f) },
+                                onShare = { shareItems(ctx, listOf(f)) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (selecting) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(start = 20.dp, end = 20.dp, bottom = 88.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(26.dp),
+                color = cs.surfaceVariant,
+                border = BorderStroke(1.dp, cs.outline),
+                shadowElevation = 8.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .clickable { selected = emptySet() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("\u2715", color = cs.onSurfaceVariant, fontSize = 16.sp)
+                    }
+                    Text(
+                        "${selItems.size}",
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 6.dp),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    if (selItems.size == 1) {
+                        TextButton(onClick = { renameTarget = selItems[0] }) { Text("Rename", color = cs.primary) }
+                    }
+                    TextButton(onClick = { deleteTargets = selItems }) { Text("Delete", color = cs.error) }
+                    TextButton(onClick = { shareItems(ctx, selItems) }) { Text("Share", color = cs.primary) }
+                }
+            }
+        }
+
+        renameTarget?.let { t ->
+            RenameDialog(
+                item = t,
+                onDismiss = { renameTarget = null },
+                onConfirm = { n ->
+                    renameTarget = null
+                    doRename(t, n)
+                }
+            )
+        }
+        if (deleteTargets.isNotEmpty()) {
+            DeleteDialog(
+                items = deleteTargets,
+                onDismiss = { deleteTargets = emptyList() },
+                onConfirm = {
+                    val ids = deleteTargets.map { it.id }
+                    deleteTargets = emptyList()
+                    doDelete(ids)
+                }
+            )
         }
     }
 }

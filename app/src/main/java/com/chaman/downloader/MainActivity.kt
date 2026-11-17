@@ -195,7 +195,7 @@ private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug:
         }
     }
 
-    BackHandler(enabled = pagerState.currentPage != 0) {
+    BackHandler(enabled = pagerState.currentPage != 0 && !LibrarySelection.active) {
         scope.launch { pagerState.animateScrollToPage(0) }
     }
 
@@ -321,27 +321,33 @@ private fun FloatingNav(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(1.dp)
                         ) {
-                            Box(modifier = Modifier.size(22.dp)) {
-                                NavIcon(i, tint, Modifier.fillMaxSize())
-                                if (i == 1 && queueBusy) {
-                                    val ringMod = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .offset(x = 7.dp, y = (-5).dp)
-                                        .size(12.dp)
+                            if (i == 1 && queueBusy) {
+                                // Download chalte waqt: icon andar, ring bahar
+                                Box(modifier = Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .border(2.dp, cs.outline.copy(alpha = 0.5f), CircleShape)
+                                    )
                                     if (queueProgress >= 0f) {
                                         CircularProgressIndicator(
                                             progress = { queueProgress },
-                                            modifier = ringMod,
+                                            modifier = Modifier.size(28.dp),
                                             color = cs.primary,
                                             strokeWidth = 2.dp
                                         )
                                     } else {
                                         CircularProgressIndicator(
-                                            modifier = ringMod,
+                                            modifier = Modifier.size(28.dp),
                                             color = cs.primary,
                                             strokeWidth = 2.dp
                                         )
                                     }
+                                    NavIcon(i, tint, Modifier.size(15.dp))
+                                }
+                            } else {
+                                Box(modifier = Modifier.size(22.dp)) {
+                                    NavIcon(i, tint, Modifier.fillMaxSize())
                                 }
                             }
                             if (closeness > 0.5f) {

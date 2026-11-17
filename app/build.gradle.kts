@@ -15,8 +15,8 @@ android {
         applicationId = "com.chaman.downloader"
         minSdk = 29 // MediaStore.Downloads (scoped storage) ke liye Android 10+
         targetSdk = 34
-        versionCode = 12
-        versionName = "0.4.7-polish"
+        versionCode = 13
+        versionName = "0.4.8-select"
 
         ndk {
             abiFilters += listOf("arm64-v8a")

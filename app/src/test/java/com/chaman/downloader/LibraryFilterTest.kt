@@ -28,3 +28,29 @@ class LibraryFilterTest {
         assertFalse(libMatches("Song one.m4a", "audio/mp4", "two", LibFilter.AUDIO))
     }
 }
+
+class LibraryActionsTest {
+    @Test fun commonMimeRules() {
+        org.junit.Assert.assertEquals("video/mp4", commonMime(listOf("video/mp4", "video/mp4")))
+        org.junit.Assert.assertEquals("video/*", commonMime(listOf("video/mp4", "video/webm")))
+        org.junit.Assert.assertEquals("*/*", commonMime(listOf("video/mp4", "audio/mp4")))
+        org.junit.Assert.assertEquals("*/*", commonMime(emptyList()))
+    }
+
+    @Test fun splitName() {
+        org.junit.Assert.assertEquals(Pair("Video", ".mp4"), splitFileName("Video.mp4"))
+        org.junit.Assert.assertEquals(Pair("a.b", ".m4a"), splitFileName("a.b.m4a"))
+        org.junit.Assert.assertEquals(Pair("noext", ""), splitFileName("noext"))
+    }
+
+    @Test fun renameKeepsExtension() {
+        org.junit.Assert.assertEquals("Naya.mp4", renamedFileName("Purana.mp4", "Naya"))
+        org.junit.Assert.assertEquals("Naya.mp4", renamedFileName("Purana.mp4", " Naya.MP4 "))
+        org.junit.Assert.assertEquals("a b.mp4", renamedFileName("x.mp4", "a/b"))
+    }
+
+    @Test fun renameRejectsEmpty() {
+        org.junit.Assert.assertNull(renamedFileName("x.mp4", "   "))
+        org.junit.Assert.assertNull(renamedFileName("x.mp4", "///"))
+    }
+}
