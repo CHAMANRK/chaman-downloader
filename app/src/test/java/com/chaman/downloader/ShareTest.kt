@@ -29,4 +29,20 @@ class ShareTest {
         assertNull(extractFirstUrl(""))
         assertNull(extractFirstUrl(null))
     }
+
+    @Test fun pasteKeepsOnlyLink() {
+        assertEquals(
+            "https://youtu.be/abc?si=x",
+            normalizeLinkInput("", "Dekho https://youtu.be/abc?si=x bahut mast video hai ye")
+        )
+    }
+
+    @Test fun typingIsUntouched() {
+        assertEquals("https://you tube", normalizeLinkInput("https://you", "https://you tube"))
+    }
+
+    @Test fun newlineAndLengthCap() {
+        assertEquals("a b", normalizeLinkInput("", "a\nb"))
+        assertEquals(MAX_LINK_LEN, normalizeLinkInput("", "a".repeat(5000)).length)
+    }
 }

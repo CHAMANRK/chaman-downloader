@@ -24,3 +24,18 @@ fun urlFromShareIntent(intent: Intent?): String? {
     if (intent?.action != Intent.ACTION_SEND) return null
     return extractFirstUrl(intent.getStringExtra(Intent.EXTRA_TEXT))
 }
+
+const val MAX_LINK_LEN = 2000
+
+/**
+ * Link field ka input saaf karta hai. Newline hataata hai, 2000 char cap lagata hai, aur agar ek saath
+ * 20+ char aa gaye (paste) aur usme link hai to sirf pehla link rakhta hai (title/extra text nahi).
+ * Chhote edits (typing) ko chhuta nahi.
+ */
+fun normalizeLinkInput(prev: String, next: String): String {
+    var v = next.replace('\n', ' ').replace('\r', ' ')
+    if (v.length - prev.length > 20) {
+        extractFirstUrl(v)?.let { v = it }
+    }
+    return v.take(MAX_LINK_LEN)
+}

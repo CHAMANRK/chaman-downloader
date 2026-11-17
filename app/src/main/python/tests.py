@@ -229,7 +229,7 @@ def download(url, outdir, cb, fmt=""):
 
     desc = " + ".join(
         "{} {}p {} {}".format(
-            kind_of(f), f.get("height") or "-", f.get("vcodec"), f.get("acodec")
+            kind_of(f), _q(f) or "-", f.get("vcodec"), f.get("acodec")
         )
         for f in reqs
     )
@@ -261,6 +261,13 @@ def _vlabel(vc):
     return v.split(".")[0] or "video"
 
 
+def _q(f):
+    """Quality number: chhoti side (vertical Shorts 1080x1920 = 1080p, height 1920 nahi)."""
+    h = f.get("height")
+    w = f.get("width")
+    return min(h, w) if (h and w) else h
+
+
 def _fsize(f):
     return int(f.get("filesize") or f.get("filesize_approx") or 0)
 
@@ -281,9 +288,10 @@ def _build_options(fmts):
     by_h = {}
     for f in video:
         key = (f.get("ext") == "mp4", f.get("tbr") or 0)
-        cur = by_h.get(f["height"])
+        q = _q(f)
+        cur = by_h.get(q)
         if cur is None or key > (cur.get("ext") == "mp4", cur.get("tbr") or 0):
-            by_h[f["height"]] = f
+            by_h[q] = f
 
     videos = []
     for h in sorted(by_h, reverse=True):
