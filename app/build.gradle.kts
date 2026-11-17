@@ -15,8 +15,8 @@ android {
         applicationId = "com.chaman.downloader"
         minSdk = 29 // MediaStore.Downloads (scoped storage) ke liye Android 10+
         targetSdk = 34
-        versionCode = 18
-        versionName = "0.4.13-mp3"
+        versionCode = 19
+        versionName = "0.4.14-mp3"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -72,8 +72,8 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    // Community-maintained FFmpegKit fork (LGPL). Phase 0 me test ho raha hai.
-    implementation("dev.ffmpegkit-maintained:ffmpeg:$ffmpegkitVersion")
+    // Community-maintained FFmpegKit fork, audio package (LGPL, lame included). Same com.arthenica.ffmpegkit API.
+    implementation("dev.ffmpegkit-maintained:ffmpeg-kit-audio:$ffmpegkitVersion")
 
     testImplementation("junit:junit:4.13.2")
 }
