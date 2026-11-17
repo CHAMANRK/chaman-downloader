@@ -1,82 +1,69 @@
 package com.chaman.downloader
 
 import android.Manifest
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
-import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.chaquo.python.PyException
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-
-private val MossLight = lightColorScheme(
-    primary = Color(0xFF4E6B4A),
-    onPrimary = Color(0xFFFFFFFF),
-    background = Color(0xFFF4F6F1),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF1C211B)
-)
-private val MossDark = darkColorScheme(
-    primary = Color(0xFF9DBB98),
-    onPrimary = Color(0xFF14210F),
-    background = Color(0xFF121612),
-    surface = Color(0xFF1B211A),
-    onSurface = Color(0xFFE2E8DF)
-)
-
-enum class Status { IDLE, RUNNING, PASS, FAIL }
-
-class TestState(val label: String) {
-    var status by mutableStateOf(Status.IDLE)
-    var log by mutableStateOf("")
-}
+import kotlin.math.absoluteValue
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,51 +71,68 @@ class MainActivity : ComponentActivity() {
         if (!Python.isStarted()) {
             Python.start(AndroidPlatform(this))
         }
-        setContent {
-            MaterialTheme(colorScheme = if (isSystemInDarkTheme()) MossDark else MossLight) {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        setContent { ChamanApp(this) }
+    }
+}
+
+private val TABS = listOf("Home", "Queue", "Library", "Settings")
+
+@Composable
+fun ChamanApp(activity: ComponentActivity) {
+    val ctx = LocalContext.current
+    var mode by remember { mutableStateOf(Prefs.theme(ctx)) }
+    val dark = when (mode) {
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+    }
+
+    DisposableEffect(dark) {
+        val t = android.graphics.Color.TRANSPARENT
+        val style = if (dark) SystemBarStyle.dark(t) else SystemBarStyle.light(t, t)
+        activity.enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+        onDispose { }
+    }
+
+    ChamanTheme(dark) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            var showDebug by rememberSaveable { mutableStateOf(false) }
+            if (showDebug) {
+                BackHandler { showDebug = false }
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                ) {
+                    Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        QuietButton("Wapas", onClick = { showDebug = false }, modifier = Modifier.width(120.dp))
+                    }
                     TestScreen()
                 }
+            } else {
+                MainShell(
+                    mode = mode,
+                    onMode = {
+                        mode = it
+                        Prefs.setTheme(ctx, it)
+                    },
+                    onOpenDebug = { showDebug = true }
+                )
             }
         }
     }
 }
 
-private fun CoroutineScope.runTest(t: TestState, block: () -> String) {
-    launch {
-        t.status = Status.RUNNING
-        t.log = ""
-        try {
-            t.log = withContext(Dispatchers.IO) { block() }
-            t.status = Status.PASS
-        } catch (e: Throwable) {
-            t.log = errText(e)
-            t.status = Status.FAIL
-        }
-    }
-}
-
-private fun py(fn: String, vararg args: Any): String =
-    Python.getInstance().getModule("tests").callAttr(fn, *args).toString()
-
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun TestScreen() {
+private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(pageCount = { TABS.size })
 
-    val t1 = remember { TestState("T1 Python") }
-    val t2 = remember { TestState("T2 yt-dlp") }
-    val t3 = remember { TestState("T3 YouTube") }
-    val t4 = remember { TestState("T4 Instagram") }
-    val t5 = remember { TestState("T5a FFmpeg version") }
-    val t6 = remember { TestState("T5b FFmpeg convert") }
-
-    var ytUrl by remember { mutableStateOf("https://www.youtube.com/watch?v=jNQXAC9IVRw") }
-    var igUrl by remember { mutableStateOf("https://www.instagram.com/reel/DfzzfBLiVrH/") }
-    var dlUrl by remember { mutableStateOf("https://youtu.be/q7nG6rCxbK4") }
-
-    val pm = remember { ctx.getSystemService(Context.POWER_SERVICE) as PowerManager }
-    var ignoringBattery by remember { mutableStateOf(pm.isIgnoringBatteryOptimizations(ctx.packageName)) }
+    var url by rememberSaveable { mutableStateOf("") }
+    var info by remember { mutableStateOf<InfoState>(InfoState.None) }
 
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) {
@@ -139,143 +143,117 @@ fun TestScreen() {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text("Chaman Downloader", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-        Text("Phase 0 / Batch C - feasibility tests", fontSize = 13.sp)
+    BackHandler(enabled = pagerState.currentPage != 0) {
+        scope.launch { pagerState.animateScrollToPage(0) }
+    }
 
-        TestCard("Test 1: Python runtime (ARM64)", t1) { scope.runTest(t1) { py("env_info") } }
-        TestCard("Test 2: yt-dlp import + version", t2) { scope.runTest(t2) { py("ytdlp_version") } }
+    fun goTo(i: Int) {
+        scope.launch { pagerState.animateScrollToPage(i) }
+    }
 
-        OutlinedTextField(
-            value = ytUrl, onValueChange = { ytUrl = it },
-            label = { Text("YouTube URL") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true
-        )
-        TestCard("Test 3: YouTube info extract", t3) { scope.runTest(t3) { py("yt_info", ytUrl.trim()) } }
-
-        OutlinedTextField(
-            value = igUrl, onValueChange = { igUrl = it },
-            label = { Text("Instagram public reel URL") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true
-        )
-        TestCard("Test 4: Instagram public info (no login)", t4) { scope.runTest(t4) { py("yt_info", igUrl.trim()) } }
-
-        TestCard("Test 5a: FFmpeg native -version", t5) { scope.runTest(t5) { FfmpegProbe.version() } }
-        TestCard("Test 5b: FFmpeg tone to m4a convert", t6) {
-            scope.runTest(t6) { FfmpegProbe.convert(ctx.cacheDir) }
-        }
-
-        // ---- Batch C: background download stability ----
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Battery optimization", fontWeight = FontWeight.Medium)
-                Text(
-                    if (ignoringBattery) "Exempt hai (background me kill hone ka chance kam)"
-                    else "Exempt nahi hai - Oppo/ColorOS download kill kar sakta hai",
-                    fontSize = 13.sp
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = {
-                            ctx.startActivity(
-                                Intent(
-                                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                                    Uri.parse("package:${ctx.packageName}")
-                                )
-                            )
-                        },
-                        enabled = !ignoringBattery
-                    ) { Text("Exempt karo") }
-                    OutlinedButton(onClick = {
-                        ignoringBattery = pm.isIgnoringBatteryOptimizations(ctx.packageName)
-                    }) { Text("Re-check") }
-                }
-            }
-        }
-
-        OutlinedTextField(
-            value = dlUrl, onValueChange = { dlUrl = it },
-            label = { Text("Lamba video URL (background test)") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true
-        )
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(
-                        "Test 6: Background download (foreground service)",
-                        fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f)
+    Box(modifier = Modifier.fillMaxSize()) {
+        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+            val offset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = 1f - offset.coerceIn(0f, 1f) * 0.6f }
+            ) {
+                when (page) {
+                    0 -> HomeScreen(
+                        url = url,
+                        onUrl = { url = it },
+                        info = info,
+                        onInfo = { info = it },
+                        onDownloadStarted = { goTo(1) }
                     )
-                    Text(DownloadState.status.name, fontWeight = FontWeight.Bold)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = {
-                            ctx.startForegroundService(
-                                Intent(ctx, DownloadService::class.java)
-                                    .putExtra(DownloadService.EXTRA_URL, dlUrl.trim())
-                            )
-                        },
-                        enabled = DownloadState.status != DlStatus.RUNNING
-                    ) { Text("Start") }
-                    OutlinedButton(
-                        onClick = { DownloadService.cancelRequested = true },
-                        enabled = DownloadState.status == DlStatus.RUNNING
-                    ) { Text("Cancel") }
-                }
-                if (DownloadState.status == DlStatus.RUNNING) {
-                    if (DownloadState.progress >= 0f) {
-                        LinearProgressIndicator(
-                            progress = { DownloadState.progress },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
-                    Text(DownloadState.line, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-                }
-                if (DownloadState.log.isNotEmpty()) {
-                    Text(DownloadState.log, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                    1 -> QueueScreen(onOpenLibrary = { goTo(2) })
+                    2 -> LibraryScreen(active = pagerState.currentPage == 2)
+                    else -> SettingsScreen(mode = mode, onMode = onMode, onOpenDebug = onOpenDebug)
                 }
             }
         }
 
-        OutlinedButton(
-            onClick = {
-                val all = listOf(t1, t2, t3, t4, t5, t6)
-                    .joinToString("\n\n") { "${it.label} [${it.status}]\n${it.log}" } +
-                    "\n\nT6 Background download [${DownloadState.status}]\nbattery_exempt=$ignoringBattery\n${DownloadState.log}"
-                val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                cm.setPrimaryClip(ClipData.newPlainText("chaman-logs", all))
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Copy all logs") }
+        FloatingNav(
+            pagerState = pagerState,
+            queueBusy = DownloadState.status == DlStatus.RUNNING,
+            onSelect = { goTo(it) },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 12.dp)
+        )
     }
 }
 
 @Composable
-private fun TestCard(title: String, state: TestState, onRun: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(title, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                Text(state.status.name, fontWeight = FontWeight.Bold)
-            }
-            Button(onClick = onRun, enabled = state.status != Status.RUNNING) { Text("Run") }
-            if (state.log.isNotEmpty()) {
-                Text(state.log, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+private fun FloatingNav(
+    pagerState: PagerState,
+    queueBusy: Boolean,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cs = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth()
+            .height(64.dp),
+        shape = RoundedCornerShape(32.dp),
+        color = cs.surface,
+        border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.6f)),
+        shadowElevation = 12.dp
+    ) {
+        BoxWithConstraints(modifier = Modifier.padding(6.dp)) {
+            val tabW = maxWidth / TABS.size
+            val pos = pagerState.currentPage + pagerState.currentPageOffsetFraction
+            val pill = RoundedCornerShape(26.dp)
+
+            // Sliding indicator: pager ke saath-saath chalta hai (swipe me bhi)
+            Box(
+                modifier = Modifier
+                    .offset(x = tabW * pos)
+                    .width(tabW)
+                    .fillMaxHeight()
+                    .clip(pill)
+                    .background(cs.primary.copy(alpha = 0.16f))
+                    .border(1.dp, cs.primary.copy(alpha = 0.45f), pill)
+            )
+
+            Row(modifier = Modifier.fillMaxSize()) {
+                TABS.forEachIndexed { i, label ->
+                    val closeness = (1f - (pos - i).absoluteValue).coerceIn(0f, 1f)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(pill)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { onSelect(i) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                label,
+                                fontSize = 14.sp,
+                                fontWeight = if (closeness > 0.5f) FontWeight.SemiBold else FontWeight.Medium,
+                                color = lerp(cs.onSurfaceVariant, cs.primary, closeness)
+                            )
+                            if (i == 1 && queueBusy) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(cs.primary)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
-
-private fun errText(e: Throwable): String =
-    if (e is PyException) "PyException: ${e.message}" else "${e::class.java.simpleName}: ${e.message}"

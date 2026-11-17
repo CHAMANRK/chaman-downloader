@@ -15,6 +15,7 @@ object DownloadState {
     var progress by mutableStateOf(0f) // 0..1, -1 = indeterminate
     var line by mutableStateOf("")
     var log by mutableStateOf("")
+    var currentTitle by mutableStateOf("") // UI set karta hai (info title ya URL)
     @Volatile var startedAt: Long = 0L
 
     private val fmt = SimpleDateFormat("HH:mm:ss", Locale.US)
