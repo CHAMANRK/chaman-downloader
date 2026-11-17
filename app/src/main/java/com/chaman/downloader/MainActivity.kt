@@ -112,6 +112,7 @@ fun ChamanApp(activity: ComponentActivity) {
     val dark = when (mode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
         ThemeMode.DARK -> true
+        ThemeMode.AMOLED -> true
         ThemeMode.LIGHT -> false
     }
 
@@ -122,7 +123,7 @@ fun ChamanApp(activity: ComponentActivity) {
         onDispose { }
     }
 
-    ChamanTheme(dark) {
+    ChamanTheme(dark, amoled = mode == ThemeMode.AMOLED) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             var showDebug by rememberSaveable { mutableStateOf(false) }
             if (showDebug) {

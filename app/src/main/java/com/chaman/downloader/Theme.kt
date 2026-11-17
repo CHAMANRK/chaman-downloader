@@ -15,7 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-enum class ThemeMode { SYSTEM, DARK, LIGHT }
+enum class ThemeMode { SYSTEM, DARK, AMOLED, LIGHT }
 
 /** Chhoti settings (SharedPreferences). */
 object Prefs {
@@ -49,6 +49,15 @@ private val LuxDark = darkColorScheme(
     outline = Color(0xFF3A342C),
     outlineVariant = Color(0xFF2A2621),
     error = Color(0xFFE5826F)
+)
+
+// AMOLED: asli black background (pixels band), baaki Dark jaisa.
+private val LuxAmoled = LuxDark.copy(
+    background = Color(0xFF000000),
+    surface = Color(0xFF080807),
+    surfaceVariant = Color(0xFF121110),
+    outline = Color(0xFF2E2923),
+    outlineVariant = Color(0xFF1C1915)
 )
 
 private val LuxLight = lightColorScheme(
@@ -85,9 +94,9 @@ private val LuxTypography = Typography(
 )
 
 @Composable
-fun ChamanTheme(dark: Boolean, content: @Composable () -> Unit) {
+fun ChamanTheme(dark: Boolean, amoled: Boolean = false, content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = if (dark) LuxDark else LuxLight,
+        colorScheme = if (dark && amoled) LuxAmoled else if (dark) LuxDark else LuxLight,
         typography = LuxTypography,
         shapes = Shapes(
             small = RoundedCornerShape(12.dp),

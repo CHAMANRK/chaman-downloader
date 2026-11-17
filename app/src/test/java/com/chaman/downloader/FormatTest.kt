@@ -71,4 +71,33 @@ class FormatTest {
         assertEquals("", shortError("   "))
         assertEquals(201, shortError("a".repeat(500)).length)
     }
+
+    @Test fun notifProgress() {
+        assertEquals(
+            "Video download ho raha hai · 45% · 2.50 MB/s · 1:15 bacha",
+            notifProgressText("video", 45.2, 2.5 * 1024 * 1024, 75.0)
+        )
+        assertEquals("Download ho raha hai", notifProgressText("single", -1.0, 0.0, -1.0))
+        assertEquals("Audio download ho raha hai · 10%", notifProgressText("audio", 10.0, 0.0, -1.0))
+    }
+
+    @Test fun failTextFriendly() {
+        assertEquals(
+            "Internet me problem aayi. Net check karke Retry karo.",
+            friendlyFailText("PyException: DownloadError: Unable to resolve host x")
+        )
+        assertEquals(
+            "Phone me jagah kam hai. Space khali karke Retry karo.",
+            friendlyFailText("IOException: No space left on device")
+        )
+        assertEquals(
+            "YouTube ne is network ko rok diya (bot-check). Wi-Fi try karo.",
+            friendlyFailText("PyException: RuntimeError: YouTube ne is network ko rok diya (bot-check). Wi-Fi try karo.\n\nDetails: x")
+        )
+        assertEquals(
+            "Download fail ho gaya: Requested format is not available",
+            friendlyFailText("PyException: RuntimeError: Requested format is not available")
+        )
+        assertEquals("Download fail ho gaya. Retry karo.", friendlyFailText(""))
+    }
 }

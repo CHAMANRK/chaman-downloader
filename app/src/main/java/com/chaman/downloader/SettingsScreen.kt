@@ -81,34 +81,40 @@ fun SettingsScreen(
 
         LuxCard {
             Text("Theme", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(
-                    ThemeMode.SYSTEM to "System",
-                    ThemeMode.DARK to "Dark",
-                    ThemeMode.LIGHT to "Light"
-                ).forEach { (m, label) ->
-                    val sel = m == mode
-                    val shape = RoundedCornerShape(22.dp)
-                    Surface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(44.dp)
-                            .clip(shape)
-                            .clickable { onMode(m) },
-                        shape = shape,
-                        color = if (sel) cs.primary.copy(alpha = 0.16f) else cs.surface,
-                        border = BorderStroke(1.dp, if (sel) cs.primary.copy(alpha = 0.6f) else cs.outline)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                label,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = if (sel) cs.primary else cs.onSurfaceVariant
-                            )
+            listOf(
+                listOf(ThemeMode.SYSTEM to "System", ThemeMode.DARK to "Dark"),
+                listOf(ThemeMode.AMOLED to "AMOLED", ThemeMode.LIGHT to "Light")
+            ).forEach { rowItems ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowItems.forEach { (m, label) ->
+                        val sel = m == mode
+                        val shape = RoundedCornerShape(22.dp)
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp)
+                                .clip(shape)
+                                .clickable { onMode(m) },
+                            shape = shape,
+                            color = if (sel) cs.primary.copy(alpha = 0.16f) else cs.surface,
+                            border = BorderStroke(1.dp, if (sel) cs.primary.copy(alpha = 0.6f) else cs.outline)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = if (sel) cs.primary else cs.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
             }
+            Text(
+                "AMOLED = asli black background (AMOLED screen pe battery bachti hai).",
+                style = MaterialTheme.typography.bodyMedium,
+                color = cs.onSurfaceVariant
+            )
         }
 
         LuxCard {
@@ -143,6 +149,7 @@ fun SettingsScreen(
         LuxCard {
             Text("Chaman Downloader", style = MaterialTheme.typography.titleMedium)
             Text("Version $version", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            Text("Made by Najeef", style = MaterialTheme.typography.bodyMedium, color = cs.primary)
             QuietButton("Engine tests (Debug)", onClick = onOpenDebug)
         }
     }

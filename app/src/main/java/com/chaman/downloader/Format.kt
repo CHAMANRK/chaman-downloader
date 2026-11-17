@@ -100,3 +100,40 @@ fun shortError(msg: String): String {
     val clean = first.removePrefix("PyException:").trim().removePrefix("RuntimeError:").trim()
     return if (clean.length > 200) clean.take(200) + "…" else clean
 }
+
+/** Notification ki progress line: "Video download ho raha hai · 45% · 12.00 MB/s · 2:10 bacha". */
+fun notifProgressText(kind: String, pct: Double, speed: Double, eta: Double): String {
+    val what = when (kind) {
+        "video" -> "Video download ho raha hai"
+        "audio" -> "Audio download ho raha hai"
+        else -> "Download ho raha hai"
+    }
+    val parts = ArrayList<String>()
+    parts += what
+    if (pct >= 0.0) parts += "${pct.toInt()}%"
+    if (speed > 0.0) parts += fmtSpeed(speed)
+    if (eta >= 0.0) parts += "${fmtEta(eta)} bacha"
+    return parts.joinToString(" · ")
+}
+
+/** Error (poora text) -> notification ke liye chhota Hinglish kaaran. */
+fun friendlyFailText(raw: String): String {
+    val l = raw.lowercase(Locale.US)
+    fun has(vararg k: String) = k.any { l.contains(it) }
+    return when {
+        has("bot-check") -> shortError(raw) // Python ka message pehle se Hinglish hai
+        has("no space left", "enospc") -> "Phone me jagah kam hai. Space khali karke Retry karo."
+        has("unable to resolve host", "unknownhost", "no address associated", "timed out",
+            "timeout", "network is unreachable", "connection reset", "connection refused") ->
+            "Internet me problem aayi. Net check karke Retry karo."
+        has("429", "too many requests") -> "Site ne abhi rok diya (bahut requests). Thodi der baad Retry karo."
+        has("login required", "log in", "sign in") -> "Is link ko login chahiye ya site ne rok diya. Baad me try karo."
+        has("private video", "video unavailable", "this video is not available", "has been removed") ->
+            "Ye video available nahi hai (private ya hata diya gaya)."
+        else -> {
+            val s = shortError(raw)
+            if (s.isEmpty()) "Download fail ho gaya. Retry karo."
+            else "Download fail ho gaya: " + (if (s.length > 100) s.take(100) + "…" else s)
+        }
+    }
+}

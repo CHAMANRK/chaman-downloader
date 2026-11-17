@@ -173,6 +173,7 @@ fun HomeScreen(
             Intent(ctx, DownloadService::class.java)
                 .putExtra(DownloadService.EXTRA_URL, url.trim())
                 .putExtra(DownloadService.EXTRA_FORMAT, fmt)
+                .putExtra(DownloadService.EXTRA_TITLE, title)
         )
         onDownloadStarted()
     }
