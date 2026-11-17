@@ -45,4 +45,21 @@ class FormatTest {
         // 3-byte characters: 180 / 3 = 60
         assertEquals(60, safeFileName("ह".repeat(100), "x").length)
     }
+
+    @Test fun duration() {
+        assertEquals("1:15", fmtDuration(75))
+        assertEquals("1:02:05", fmtDuration(3725))
+    }
+
+    @Test fun count() {
+        assertEquals("950", fmtCount(950))
+        assertEquals("15.3K", fmtCount(15_300))
+        assertEquals("1.2M", fmtCount(1_234_567))
+    }
+
+    @Test fun dateYmd() {
+        assertEquals("17 Nov 2026", fmtDateYmd("20261117"))
+        assertEquals("abc", fmtDateYmd("abc"))
+        assertEquals("20261317", fmtDateYmd("20261317"))
+    }
 }

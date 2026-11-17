@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -40,13 +41,14 @@ fun GoldButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier.fillMaxWidth(),
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    height: Dp = 54.dp
 ) {
     val cs = MaterialTheme.colorScheme
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.height(54.dp),
+        modifier = modifier.height(height),
         shape = RoundedCornerShape(27.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = cs.primary,
@@ -64,13 +66,14 @@ fun QuietButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier.fillMaxWidth(),
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    height: Dp = 50.dp
 ) {
     val cs = MaterialTheme.colorScheme
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.height(50.dp),
+        modifier = modifier.height(height),
         shape = RoundedCornerShape(25.dp),
         border = BorderStroke(1.dp, cs.outline),
         colors = ButtonDefaults.outlinedButtonColors(

@@ -72,3 +72,24 @@ fun safeFileName(title: String, fallback: String, maxBytes: Int = 180): String {
     val s = out.toString().trim().trim('.', ' ')
     return if (s.isEmpty()) fallback else s
 }
+
+/** seconds -> "m:ss" / "h:mm:ss" (video duration). */
+fun fmtDuration(sec: Long): String = fmtEta(sec.toDouble())
+
+/** 1234567 -> "1.2M", 15300 -> "15.3K", 950 -> "950". */
+fun fmtCount(n: Long): String = when {
+    n >= 1_000_000_000L -> String.format(Locale.US, "%.1fB", n / 1_000_000_000.0)
+    n >= 1_000_000L -> String.format(Locale.US, "%.1fM", n / 1_000_000.0)
+    n >= 1_000L -> String.format(Locale.US, "%.1fK", n / 1_000.0)
+    else -> n.toString()
+}
+
+private val MONTHS = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+/** "20261117" -> "17 Nov 2026"; format na samjhe to input wapas. */
+fun fmtDateYmd(s: String): String {
+    if (s.length != 8 || !s.all { it.isDigit() }) return s
+    val m = s.substring(4, 6).toInt()
+    if (m !in 1..12) return s
+    return "${s.substring(6, 8).toInt()} ${MONTHS[m - 1]} ${s.substring(0, 4)}"
+}

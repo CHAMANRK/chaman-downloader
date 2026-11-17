@@ -30,6 +30,7 @@ class DownloadService : Service() {
 
     companion object {
         const val EXTRA_URL = "url"
+        const val EXTRA_FORMAT = "format" // yt-dlp format string; khaali = best
         const val ACTION_CANCEL = "com.chaman.downloader.CANCEL"
         private const val CHANNEL = "downloads"
         private const val NOTIF_ID = 1
@@ -59,6 +60,7 @@ class DownloadService : Service() {
         )
 
         val url = intent?.getStringExtra(EXTRA_URL)
+        val fmt = intent?.getStringExtra(EXTRA_FORMAT) ?: ""
         if (url.isNullOrBlank()) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -102,7 +104,7 @@ class DownloadService : Service() {
             try {
                 val json = JSONObject(
                     Python.getInstance().getModule("tests")
-                        .callAttr("download", url, outDir.absolutePath, cb).toString()
+                        .callAttr("download", url, outDir.absolutePath, cb, fmt).toString()
                 )
                 DownloadState.logLine("formats: ${json.getString("desc")}")
                 val parts = json.getJSONArray("files")
@@ -122,7 +124,7 @@ class DownloadService : Service() {
                 val displayName = safeFileName(json.optString("title", ""), json.getString("id")) +
                     "." + src.extension
                 DownloadState.logLine("ready: $displayName (${src.length()} bytes), MediaStore me save")
-                saveToDownloads(src, displayName)
+                saveToDownloads(src, displayName, !json.optBoolean("has_video", true))
                 val secs = (System.currentTimeMillis() - DownloadState.startedAt) / 1000
                 DownloadState.logLine("PASS in ${secs}s -> Download/Chaman/$displayName")
                 DownloadState.progress = 1f
@@ -156,10 +158,10 @@ class DownloadService : Service() {
         super.onDestroy()
     }
 
-    private fun saveToDownloads(src: File, displayName: String) {
+    private fun saveToDownloads(src: File, displayName: String, audioOnly: Boolean) {
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, displayName)
-            put(MediaStore.Downloads.MIME_TYPE, extToMime(src.extension))
+            put(MediaStore.Downloads.MIME_TYPE, extToMime(src.extension, audioOnly))
             put(MediaStore.Downloads.RELATIVE_PATH, "Download/Chaman")
             put(MediaStore.Downloads.IS_PENDING, 1)
         }
