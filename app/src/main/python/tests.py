@@ -52,6 +52,53 @@ def yt_info(url):
 FORMAT_SELECTOR = "bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b"
 
 
+# ---------------- YouTube bot-check: player client fallback (Step E) ----------------
+# Data/shared IP pe YouTube default client se formats nahi deta ("Sign in to confirm you're not a bot").
+# Alag player client chain me try hote hain; jo chalta hai wahi us URL ke liye yaad rehta hai
+# (download() ko wahi format ids chahiye jo search() ne dikhaye). Order badalna ho to sirf ye list.
+_YT_CLIENTS = [None, "tv", "android_vr", "web_embedded"]  # None = yt-dlp ka default
+_client_memo = {}  # url -> client jo kaam kiya
+
+BOT_MSG = "YouTube ne is network ko rok diya (bot-check). Wi-Fi try karo ya thodi der baad dubara."
+NO_FORMATS_MSG = "YouTube ne is video ke formats nahi diye (bot-check ya restricted video). Wi-Fi try karo ya thodi der baad dubara."
+
+
+def _is_youtube(url):
+    u = url.lower()
+    return "youtube.com" in u or "youtu.be" in u
+
+
+def _is_bot_check(msg):
+    m = str(msg).lower()
+    return "not a bot" in m and "sign in" in m
+
+
+def _client_order(url):
+    """Non-YouTube: sirf default. YouTube: yaad rakha client pehle, phir baaki."""
+    if not _is_youtube(url):
+        return [None]
+    order = list(_YT_CLIENTS)
+    if url in _client_memo:
+        c = _client_memo[url]
+        if c in order:
+            order.remove(c)
+        order.insert(0, c)
+    return order
+
+
+def _with_client(opts, client):
+    if client is None:
+        return dict(opts)
+    return dict(opts, extractor_args={"youtube": {"player_client": [client]}})
+
+
+def _friendly(err):
+    """Bot-check ho to saaf message (details ke saath), warna original error."""
+    if _is_bot_check(err):
+        return RuntimeError(BOT_MSG + "\n\nDetails: " + str(err))
+    return err
+
+
 def _formats_summary(url, base_opts):
     """Format select fail ho to diagnose ke liye available formats ki short list."""
     import yt_dlp
@@ -95,15 +142,29 @@ def download(url, outdir, cb, fmt=""):
         "fragment_retries": 5,
     }
 
-    try:
-        with yt_dlp.YoutubeDL(dict(base_opts, format=fmt or FORMAT_SELECTOR)) as ydl:
-            info = ydl.extract_info(url, download=False)
-    except yt_dlp.utils.DownloadError as e:
-        if "format" in str(e).lower():
+    info = None
+    client_used = None
+    last_err = None
+    for c in _client_order(url):
+        try:
+            with yt_dlp.YoutubeDL(_with_client(dict(base_opts, format=fmt or FORMAT_SELECTOR), c)) as ydl:
+                info = ydl.extract_info(url, download=False)
+            client_used = c
+            if _is_youtube(url):
+                _client_memo[url] = c
+            break
+        except yt_dlp.utils.YoutubeDLError as e:
+            last_err = e
+    if info is None:
+        if _is_bot_check(last_err):
+            raise _friendly(last_err)
+        if "format" in str(last_err).lower():
             raise RuntimeError(
-                str(e) + "\nAvailable formats:\n" + _formats_summary(url, base_opts)
+                str(last_err) + "\nAvailable formats:\n"
+                + _formats_summary(url, _with_client(base_opts, _client_memo.get(url)))
             )
-        raise
+        raise last_err
+    base_opts = _with_client(base_opts, client_used)
 
     vid = info["id"]
     reqs = info.get("requested_formats") or [info]
@@ -151,9 +212,12 @@ def download(url, outdir, cb, fmt=""):
             outtmpl="%s/%s.%s.%%(ext)s" % (outdir, vid, kind),
             progress_hooks=[hook],
         )
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info2 = ydl.extract_info(url, download=True)
-            paths.append(ydl.prepare_filename(info2))
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info2 = ydl.extract_info(url, download=True)
+                paths.append(ydl.prepare_filename(info2))
+        except yt_dlp.utils.DownloadError as e:
+            raise _friendly(e)
         done_before += sizes[i]
 
     if n == 2:
@@ -169,6 +233,8 @@ def download(url, outdir, cb, fmt=""):
         )
         for f in reqs
     )
+    if _is_youtube(url):
+        desc += " [client=%s]" % (client_used or "default")
     return json.dumps(
         {"files": paths, "id": vid, "title": info.get("title") or vid, "merge_ext": merge_ext, "desc": desc,
          "has_video": any(f.get("vcodec") not in (None, "none") for f in reqs)},
@@ -270,8 +336,29 @@ def search(url):
         "ignore_no_formats_error": True,
         "socket_timeout": 20,
     }
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
+    info = None
+    client_used = None
+    last_err = None
+    last_info = None
+    for c in _client_order(url):
+        try:
+            with yt_dlp.YoutubeDL(_with_client(opts, c)) as ydl:
+                got = ydl.extract_info(url, download=False)
+        except yt_dlp.utils.YoutubeDLError as e:
+            last_err = e
+            continue
+        if _is_youtube(url) and not (got.get("formats") or []):
+            last_info = got  # title mila par formats nahi: agla client
+            continue
+        info = got
+        client_used = c
+        if _is_youtube(url):
+            _client_memo[url] = c
+        break
+    if info is None:
+        if last_info is None and last_err is not None:
+            raise _friendly(last_err)
+        raise RuntimeError(NO_FORMATS_MSG)
 
     videos, audios = _build_options(info.get("formats") or [])
     desc = info.get("description") or ""
@@ -285,6 +372,7 @@ def search(url):
         "site": info.get("extractor_key") or info.get("extractor"),
         "description": desc[:1500],
         "thumbnail": info.get("thumbnail"),
+        "client": client_used or "default",
         "videos": videos,
         "audios": audios,
     }

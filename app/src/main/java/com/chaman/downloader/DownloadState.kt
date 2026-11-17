@@ -16,6 +16,7 @@ object DownloadState {
     var line by mutableStateOf("")
     var log by mutableStateOf("")
     var currentTitle by mutableStateOf("") // UI set karta hai (info title ya URL)
+    var error by mutableStateOf("") // FAIL par chhota, padhne layak message (poora error log me)
     @Volatile var startedAt: Long = 0L
 
     private val fmt = SimpleDateFormat("HH:mm:ss", Locale.US)
@@ -25,6 +26,7 @@ object DownloadState {
         progress = 0f
         line = ""
         log = ""
+        error = ""
         startedAt = System.currentTimeMillis()
         logLine("start")
     }

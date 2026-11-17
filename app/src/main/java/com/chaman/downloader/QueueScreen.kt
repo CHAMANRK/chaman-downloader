@@ -73,6 +73,14 @@ fun QueueScreen(onOpenLibrary: () -> Unit) {
                     color = if (st == DlStatus.FAIL) cs.error else cs.primary
                 )
 
+                if (st == DlStatus.FAIL && DownloadState.error.isNotBlank()) {
+                    Text(
+                        DownloadState.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = cs.onSurfaceVariant
+                    )
+                }
+
                 if (st == DlStatus.RUNNING) {
                     val barMod = Modifier
                         .fillMaxWidth()

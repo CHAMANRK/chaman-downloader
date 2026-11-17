@@ -62,4 +62,13 @@ class FormatTest {
         assertEquals("abc", fmtDateYmd("abc"))
         assertEquals("20261317", fmtDateYmd("20261317"))
     }
+
+    @Test fun shortErrorStripsPrefixAndKeepsFirstLine() {
+        assertEquals(
+            "YouTube ne is network ko rok diya.",
+            shortError("PyException: RuntimeError: YouTube ne is network ko rok diya.\n\nDetails: x")
+        )
+        assertEquals("", shortError("   "))
+        assertEquals(201, shortError("a".repeat(500)).length)
+    }
 }

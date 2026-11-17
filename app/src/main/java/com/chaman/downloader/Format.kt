@@ -93,3 +93,10 @@ fun fmtDateYmd(s: String): String {
     if (m !in 1..12) return s
     return "${s.substring(6, 8).toInt()} ${MONTHS[m - 1]} ${s.substring(0, 4)}"
 }
+
+/** Error ka pehla line, "PyException: RuntimeError: " jaise prefix hata ke (Queue card me dikhane ke liye). */
+fun shortError(msg: String): String {
+    val first = msg.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() } ?: return ""
+    val clean = first.removePrefix("PyException:").trim().removePrefix("RuntimeError:").trim()
+    return if (clean.length > 200) clean.take(200) + "…" else clean
+}
