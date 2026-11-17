@@ -5,6 +5,7 @@ plugins {
 }
 
 val ytdlpVersion: String = providers.gradleProperty("ytdlpVersion").get()
+val ffmpegkitVersion: String = providers.gradleProperty("ffmpegkitVersion").get()
 
 android {
     namespace = "com.chaman.downloader"
@@ -15,7 +16,7 @@ android {
         minSdk = 24
         targetSdk = 34
         versionCode = 1
-        versionName = "0.1.0-phase0a"
+        versionName = "0.2.0-phase0b"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -53,4 +54,6 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    // Community-maintained FFmpegKit fork (LGPL). Phase 0 me test ho raha hai.
+    implementation("dev.ffmpegkit-maintained:ffmpeg:$ffmpegkitVersion")
 }

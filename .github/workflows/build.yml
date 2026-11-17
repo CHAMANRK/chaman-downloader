@@ -49,6 +49,7 @@ jobs:
           {
             echo "commit: $GITHUB_SHA"
             echo "yt-dlp: $YTDLP_VERSION"
+            grep '^ffmpegkitVersion' gradle.properties | sed 's/ffmpegkitVersion=/ffmpegkit: /'
             echo "agp: 8.5.2 | kotlin: 1.9.24 | chaquopy: 16.0.0 | python: 3.11 | gradle: 8.7"
           } > out/BUILD_INFO.txt
 

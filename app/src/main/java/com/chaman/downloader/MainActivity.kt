@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.chaquo.python.PyException
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -61,6 +62,11 @@ private val MossDark = darkColorScheme(
 
 enum class Status { IDLE, RUNNING, PASS, FAIL }
 
+class TestState(val label: String) {
+    var status by mutableStateOf(Status.IDLE)
+    var log by mutableStateOf("")
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,22 +83,37 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun CoroutineScope.runTest(t: TestState, block: () -> String) {
+    launch {
+        t.status = Status.RUNNING
+        t.log = ""
+        try {
+            t.log = withContext(Dispatchers.IO) { block() }
+            t.status = Status.PASS
+        } catch (e: Throwable) {
+            t.log = errText(e)
+            t.status = Status.FAIL
+        }
+    }
+}
+
+private fun py(fn: String, vararg args: Any): String =
+    Python.getInstance().getModule("tests").callAttr(fn, *args).toString()
+
 @Composable
 fun TestScreen() {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var pyStatus by remember { mutableStateOf(Status.IDLE) }
-    var pyLog by remember { mutableStateOf("") }
-    var ytStatus by remember { mutableStateOf(Status.IDLE) }
-    var ytLog by remember { mutableStateOf("") }
-    var infoStatus by remember { mutableStateOf(Status.IDLE) }
-    var infoLog by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf("https://www.youtube.com/watch?v=jNQXAC9IVRw") }
+    val t1 = remember { TestState("T1 Python") }
+    val t2 = remember { TestState("T2 yt-dlp") }
+    val t3 = remember { TestState("T3 YouTube") }
+    val t4 = remember { TestState("T4 Instagram") }
+    val t5 = remember { TestState("T5a FFmpeg version") }
+    val t6 = remember { TestState("T5b FFmpeg convert") }
 
-    suspend fun runPy(fn: String, vararg args: Any): String = withContext(Dispatchers.IO) {
-        Python.getInstance().getModule("tests").callAttr(fn, *args).toString()
-    }
+    var ytUrl by remember { mutableStateOf("https://www.youtube.com/watch?v=jNQXAC9IVRw") }
+    var igUrl by remember { mutableStateOf("https://www.instagram.com/reel/DfzzfBLiVrH/") }
 
     Column(
         modifier = Modifier
@@ -102,66 +123,34 @@ fun TestScreen() {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Chaman Downloader", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-        Text("Phase 0 / Batch A - feasibility tests", fontSize = 13.sp)
+        Text("Phase 0 / Batch B - feasibility tests", fontSize = 13.sp)
 
-        TestCard(
-            title = "Test 1: Python runtime (ARM64)",
-            status = pyStatus,
-            log = pyLog,
-            onRun = {
-                scope.launch {
-                    pyStatus = Status.RUNNING; pyLog = ""
-                    try {
-                        pyLog = runPy("env_info"); pyStatus = Status.PASS
-                    } catch (e: Throwable) {
-                        pyLog = errText(e); pyStatus = Status.FAIL
-                    }
-                }
-            }
-        )
-
-        TestCard(
-            title = "Test 2: yt-dlp import + version",
-            status = ytStatus,
-            log = ytLog,
-            onRun = {
-                scope.launch {
-                    ytStatus = Status.RUNNING; ytLog = ""
-                    try {
-                        ytLog = runPy("ytdlp_version"); ytStatus = Status.PASS
-                    } catch (e: Throwable) {
-                        ytLog = errText(e); ytStatus = Status.FAIL
-                    }
-                }
-            }
-        )
+        TestCard("Test 1: Python runtime (ARM64)", t1) { scope.runTest(t1) { py("env_info") } }
+        TestCard("Test 2: yt-dlp import + version", t2) { scope.runTest(t2) { py("ytdlp_version") } }
 
         OutlinedTextField(
-            value = url,
-            onValueChange = { url = it },
+            value = ytUrl, onValueChange = { ytUrl = it },
             label = { Text("YouTube URL") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            modifier = Modifier.fillMaxWidth(), singleLine = true
         )
-        TestCard(
-            title = "Test 3: YouTube info extract (no download)",
-            status = infoStatus,
-            log = infoLog,
-            onRun = {
-                scope.launch {
-                    infoStatus = Status.RUNNING; infoLog = ""
-                    try {
-                        infoLog = runPy("yt_info", url.trim()); infoStatus = Status.PASS
-                    } catch (e: Throwable) {
-                        infoLog = errText(e); infoStatus = Status.FAIL
-                    }
-                }
-            }
+        TestCard("Test 3: YouTube info extract", t3) { scope.runTest(t3) { py("yt_info", ytUrl.trim()) } }
+
+        OutlinedTextField(
+            value = igUrl, onValueChange = { igUrl = it },
+            label = { Text("Instagram public reel URL") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true
         )
+        TestCard("Test 4: Instagram public info (no login)", t4) { scope.runTest(t4) { py("yt_info", igUrl.trim()) } }
+
+        TestCard("Test 5a: FFmpeg native -version", t5) { scope.runTest(t5) { FfmpegProbe.version() } }
+        TestCard("Test 5b: FFmpeg tone to m4a convert", t6) {
+            scope.runTest(t6) { FfmpegProbe.convert(ctx.cacheDir) }
+        }
 
         OutlinedButton(
             onClick = {
-                val all = "T1 [$pyStatus]\n$pyLog\n\nT2 [$ytStatus]\n$ytLog\n\nT3 [$infoStatus]\n$infoLog"
+                val all = listOf(t1, t2, t3, t4, t5, t6)
+                    .joinToString("\n\n") { "${it.label} [${it.status}]\n${it.log}" }
                 val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 cm.setPrimaryClip(ClipData.newPlainText("chaman-logs", all))
             },
@@ -171,7 +160,7 @@ fun TestScreen() {
 }
 
 @Composable
-private fun TestCard(title: String, status: Status, log: String, onRun: () -> Unit) {
+private fun TestCard(title: String, state: TestState, onRun: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
@@ -179,11 +168,11 @@ private fun TestCard(title: String, status: Status, log: String, onRun: () -> Un
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(title, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                Text(status.name, fontWeight = FontWeight.Bold)
+                Text(state.status.name, fontWeight = FontWeight.Bold)
             }
-            Button(onClick = onRun, enabled = status != Status.RUNNING) { Text("Run") }
-            if (log.isNotEmpty()) {
-                Text(log, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            Button(onClick = onRun, enabled = state.status != Status.RUNNING) { Text("Run") }
+            if (state.log.isNotEmpty()) {
+                Text(state.log, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             }
         }
     }
