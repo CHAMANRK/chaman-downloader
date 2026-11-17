@@ -15,11 +15,29 @@ android {
         applicationId = "com.chaman.downloader"
         minSdk = 29 // MediaStore.Downloads (scoped storage) ke liye Android 10+
         targetSdk = 34
-        versionCode = 6
-        versionName = "0.4.1-phase1a"
+        versionCode = 7
+        versionName = "0.4.2-logo-key"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
+        }
+    }
+
+    // Permanent signing key: CI secrets se env vars aate hain. Na mile to debug key (fallback).
+    val chamanKeystore = System.getenv("CHAMAN_KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
+    signingConfigs {
+        if (chamanKeystore != null) {
+            create("chaman") {
+                storeFile = chamanKeystore
+                storePassword = System.getenv("CHAMAN_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("CHAMAN_KEY_ALIAS") ?: "chaman"
+                keyPassword = System.getenv("CHAMAN_KEYSTORE_PASSWORD") // PKCS12: key password = store password
+            }
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            signingConfigs.findByName("chaman")?.let { signingConfig = it }
         }
     }
 

@@ -29,7 +29,7 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 - Ek step device pe pass hone ke baad hi agla step
 - Koi fake/non-functional button nahi; proper error handling + logging
 - Stable functionality preserve; tested dependency versions pin
-- Keys/tokens kahin hardcode nahi
+- Keys/tokens/keystore kahin hardcode nahi, repo me nahi (sirf GitHub Secrets)
 - Website access restrictions aur content rights ka respect
 - Repo hamesha public
 
@@ -50,7 +50,8 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 - Phase 1 (base UI) v0.4.0: device pe pass (user ne confirm kiya, tag v0.4.0). Home/Queue/Library/Settings + floating nav + swipe pager. Queue abhi sirf ek current download dikhata hai (Room queue Phase 2). Library tap = file open (ACTION_VIEW). Quality default / delete / share abhi nahi (fake button nahi rakhna).
 
 - Phase 1 improvements (user request, 3 steps):
-  - Step A v0.4.1 (CODE LIKHA, device test pending): file naam = video title (`safeFileName`, illegal chars hata, 180 UTF-8 bytes limit; duplicate naam par Android khud (1) lagata hai), speed auto unit (1024 KB/s se upar MB/s) + ETA + size (`Format.kt`, unit tests `FormatTest.kt`), Library me thumbnail (loadThumbnail, fallback first frame; audio ke liye placeholder). Python `download` ab `cb.onStats(...)` call karta hai aur JSON me `title` deta hai.
+  - Step A v0.4.1 (device pe pass, tag v0.4.1): file naam = video title (`safeFileName`, illegal chars hata, 180 UTF-8 bytes limit; duplicate naam par Android khud (1) lagata hai), speed auto unit (1024 KB/s se upar MB/s) + ETA + size (`Format.kt`, unit tests `FormatTest.kt`), Library me thumbnail (loadThumbnail, fallback first frame; audio ke liye placeholder). Python `download` ab `cb.onStats(...)` call karta hai aur JSON me `title` deta hai.
+  - v0.4.2 (CODE LIKHA, device test pending): logo (adaptive vector icon: warm black bg, gold "C" + download arrow, monochrome themed icon bhi) + permanent signing key. Key GitHub Secrets me: `CHAMAN_KEYSTORE_B64` (base64 .jks), `CHAMAN_KEYSTORE_PASSWORD` (PKCS12, key password = store password), alias `chaman` (workflow me fixed). Secrets na mile to debug key fallback (workflow warning + BUILD_INFO me `signing:` line). Keystore repo me kabhi nahi (`.gitignore` me `*.jks`); user ke paas backup (Drive/laptop). Pehli baar purani (debug-key) APK uninstall lagega, uske baad update seedha.
   - Step B (baaki): Search button (Info ki jagah) -> poori detail (thumbnail, title, channel, duration, date, views, likes, description) + har quality ke saath apna Download button + audio-only options. mp3 abhi nahi (libmp3lame unverified).
   - Step C (baaki): Settings me Download folder select (default `Download/Chaman`, Change via folder picker, default pe wapas). Library chuna hua folder dikhayegi.
 

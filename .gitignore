@@ -6,3 +6,6 @@ local.properties
 *.apk
 *.zip
 __pycache__/
+*.jks
+*.keystore
+*.p12

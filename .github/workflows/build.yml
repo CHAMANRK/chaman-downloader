@@ -46,6 +46,22 @@ jobs:
       - name: Unit tests
         run: gradle :app:testDebugUnitTest -PytdlpVersion="$YTDLP_VERSION" --stacktrace
 
+      - name: Prepare signing key
+        env:
+          KS_B64: ${{ secrets.CHAMAN_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.CHAMAN_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/chaman-release.jks"
+            echo "CHAMAN_KEYSTORE_FILE=$RUNNER_TEMP/chaman-release.jks" >> "$GITHUB_ENV"
+            echo "CHAMAN_KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            echo "CHAMAN_KEY_ALIAS=chaman" >> "$GITHUB_ENV"
+            echo "SIGNING=chaman permanent key" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Signing secrets nahi mile, debug key use hogi (update ke liye uninstall lagega)"
+            echo "SIGNING=debug key (fallback)" >> "$GITHUB_ENV"
+          fi
+
       - name: Build debug APK
         run: gradle :app:assembleDebug -PytdlpVersion="$YTDLP_VERSION" --stacktrace
 
@@ -58,6 +74,11 @@ jobs:
             echo "yt-dlp: $YTDLP_VERSION (PyPI latest at build time: $YTDLP_LATEST)"
             grep '^ffmpegkitVersion' gradle.properties | sed 's/ffmpegkitVersion=/ffmpegkit: /'
             echo "agp: 8.5.2 | kotlin: 1.9.24 | chaquopy: 16.0.0 | python: 3.11 | gradle: 8.7 | jdk: 17"
+            echo "signing: $SIGNING"
+            APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | tail -n 1)
+            if [ -n "$APKSIGNER" ]; then
+              "$APKSIGNER" verify --print-certs out/chaman-downloader-debug.apk | grep -i "SHA-256" | head -n 1 | sed 's/^/cert: /' || true
+            fi
             echo "actions: checkout@v4 setup-java@v4 setup-python@v5 setup-gradle@v4 upload-artifact@v4"
           } > out/BUILD_INFO.txt
           cat out/BUILD_INFO.txt
