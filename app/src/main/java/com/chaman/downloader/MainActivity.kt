@@ -186,6 +186,7 @@ private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug:
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FloatingNav(
     pagerState: PagerState,
