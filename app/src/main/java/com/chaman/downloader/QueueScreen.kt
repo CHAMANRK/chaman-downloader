@@ -41,7 +41,7 @@ fun QueueScreen(onOpenLibrary: () -> Unit) {
             .padding(top = 20.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        PageTitle("Queue", "Abhi jo chal raha hai.")
+        PageTitle("Queue")
 
         if (st == DlStatus.IDLE) {
             LuxCard {

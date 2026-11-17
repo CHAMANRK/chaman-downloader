@@ -198,7 +198,7 @@ fun HomeScreen(
                 .padding(top = 20.dp, bottom = if (okData != null) 190.dp else 120.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            PageTitle("Chaman", "Link daalo. Baaki Chaman sambhalega.")
+            PageTitle("Chaman")
 
             LuxCard {
                 OutlinedTextField(

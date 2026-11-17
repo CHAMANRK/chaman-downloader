@@ -564,7 +564,7 @@ fun LibraryScreen(active: Boolean) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                PageTitle("Library", "Download/Chaman me jo files hain.")
+                PageTitle("Library")
             }
             if (error == null && files.isNotEmpty()) {
                 item {

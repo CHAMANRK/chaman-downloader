@@ -86,9 +86,11 @@ fun QuietButton(
 }
 
 @Composable
-fun PageTitle(title: String, sub: String) {
+fun PageTitle(title: String, sub: String = "") {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(title, style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.onBackground)
-        Text(sub, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (sub.isNotBlank()) {
+            Text(sub, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }

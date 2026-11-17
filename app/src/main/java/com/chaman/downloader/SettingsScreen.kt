@@ -77,7 +77,7 @@ fun SettingsScreen(
             .padding(top = 20.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        PageTitle("Settings", "Look aur background behaviour.")
+        PageTitle("Settings")
 
         LuxCard {
             Text("Theme", style = MaterialTheme.typography.titleMedium)
@@ -110,31 +110,11 @@ fun SettingsScreen(
                     }
                 }
             }
-            Text(
-                "AMOLED = asli black background (AMOLED screen pe battery bachti hai).",
-                style = MaterialTheme.typography.bodyMedium,
-                color = cs.onSurfaceVariant
-            )
         }
 
-        LuxCard {
-            Text("Files kahan save hoti hain", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Download/Chaman (phone ke Downloads folder me)",
-                style = MaterialTheme.typography.bodyMedium,
-                color = cs.onSurfaceVariant
-            )
-        }
-
-        LuxCard {
-            Text("Background download", style = MaterialTheme.typography.titleMedium)
-            Text(
-                if (exempt) "Battery optimization se exempt hai. Screen off me bhi download chalna chahiye."
-                else "Exempt nahi hai. Oppo/ColorOS background me download kill kar sakta hai.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = cs.onSurfaceVariant
-            )
-            if (!exempt) {
+        if (!exempt) {
+            LuxCard {
+                Text("Background download", style = MaterialTheme.typography.titleMedium)
                 GoldButton("Exempt karo", onClick = {
                     ctx.startActivity(
                         Intent(
@@ -147,10 +127,18 @@ fun SettingsScreen(
         }
 
         LuxCard {
-            Text("Chaman Downloader", style = MaterialTheme.typography.titleMedium)
+            Text("Files saved in Download/Chaman", style = MaterialTheme.typography.titleMedium)
+        }
+
+        QuietButton("Engine tests (Debug)", onClick = onOpenDebug)
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             Text("Version $version", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
             Text("Made by Najeef", style = MaterialTheme.typography.bodyMedium, color = cs.primary)
-            QuietButton("Engine tests (Debug)", onClick = onOpenDebug)
         }
     }
 }
