@@ -100,4 +100,18 @@ class FormatTest {
         )
         assertEquals("Download fail ho gaya. Retry karo.", friendlyFailText(""))
     }
+
+    @Test fun notifTitleBody() {
+        assertEquals("Video download ho raha hai", notifProgressTitle("video"))
+        assertEquals("Audio download ho raha hai", notifProgressTitle("audio"))
+        assertEquals("Download ho raha hai", notifProgressTitle("single"))
+        assertEquals("45% · 2.50 MB/s · 1:15 bacha", notifProgressBody(45.2, 2.5 * 1024 * 1024, 75.0))
+        assertEquals("", notifProgressBody(-1.0, 0.0, -1.0))
+    }
+
+    @Test fun failBodyOnlyReason() {
+        assertEquals("Retry karo.", notifFailBody(""))
+        assertEquals("Requested format is not available", notifFailBody("PyException: RuntimeError: Requested format is not available"))
+        assertEquals("Internet me problem aayi. Net check karke Retry karo.", notifFailBody("Unable to resolve host x"))
+    }
 }

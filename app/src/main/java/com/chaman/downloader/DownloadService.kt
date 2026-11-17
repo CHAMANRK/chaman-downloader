@@ -20,12 +20,13 @@ import org.json.JSONObject
 import java.io.File
 
 /** Python side is object ko call karta hai (progress + cancel check). */
-class ProgressCb(private val onP: (Double, String, String) -> Unit) {
+class ProgressCb(private val onP: (Double, String, String, String) -> Unit) {
     fun onStats(pct: Double, kind: String, done: Double, total: Double, speed: Double, eta: Double) {
         onP(
             pct,
             formatProgressLine(kind, done, total, speed, eta),
-            notifProgressText(kind, pct, speed, eta)
+            notifProgressTitle(kind),
+            notifProgressBody(pct, speed, eta)
         )
     }
 
@@ -66,7 +67,7 @@ class DownloadService : Service() {
         ensureChannel()
         startForeground(
             NOTIF_ID,
-            buildNotif("Link check ho raha hai...", -1),
+            buildNotif("Link check ho raha hai", "", -1),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         )
 
@@ -94,13 +95,13 @@ class DownloadService : Service() {
         var lastNotif = 0L
         var lastHeartbeat = System.currentTimeMillis()
         var nextMark = 10
-        val cb = ProgressCb { pct, text, ntext ->
+        val cb = ProgressCb { pct, text, ntitle, nbody ->
             DownloadState.progress = if (pct >= 0) (pct / 100.0).toFloat() else -1f
             DownloadState.line = text
             val now = System.currentTimeMillis()
             if (now - lastNotif > 1000) {
                 lastNotif = now
-                nm.notify(NOTIF_ID, buildNotif(ntext, pct.toInt()))
+                nm.notify(NOTIF_ID, buildNotif(ntitle, nbody.ifBlank { DownloadState.currentTitle }, pct.toInt()))
             }
             while (pct >= nextMark && nextMark <= 100) {
                 DownloadState.logLine("$nextMark%  $text")
@@ -128,7 +129,7 @@ class DownloadService : Service() {
                     val a = File(parts.getString(1))
                     DownloadState.logLine("download done: video ${v.length()} B, audio ${a.length()} B. FFmpeg merge...")
                     DownloadState.line = "Merging video + audio..."
-                    nm.notify(NOTIF_ID, buildNotif("Video aur audio jod rahe hain...", -1))
+                    nm.notify(NOTIF_ID, buildNotif("Video aur audio jod rahe hain", DownloadState.currentTitle, -1))
                     src = File(outDir, json.getString("id") + "." + json.getString("merge_ext"))
                     FfmpegProbe.merge(v, a, src)
                     v.delete()
@@ -139,7 +140,7 @@ class DownloadService : Service() {
                 val displayName = safeFileName(json.optString("title", ""), json.getString("id")) +
                     "." + src.extension
                 DownloadState.logLine("ready: $displayName (${src.length()} bytes), MediaStore me save")
-                nm.notify(NOTIF_ID, buildNotif("File save ho rahi hai...", -1))
+                nm.notify(NOTIF_ID, buildNotif("File save ho rahi hai", displayName, -1))
                 saveToDownloads(src, displayName, !json.optBoolean("has_video", true))
                 val secs = (System.currentTimeMillis() - DownloadState.startedAt) / 1000
                 DownloadState.logLine("PASS in ${secs}s -> Download/Chaman/$displayName")
@@ -151,14 +152,14 @@ class DownloadService : Service() {
                 if (cancelRequested) {
                     DownloadState.logLine("CANCELLED by user")
                     DownloadState.status = DlStatus.CANCELLED
-                    notifyStopped("Download rok diya", url, fmt, title)
+                    notifyStopped("Download rok diya", DownloadState.currentTitle, url, fmt, title)
                 } else {
                     val msg = if (t is PyException) "PyException: ${t.message}"
                     else "${t::class.java.simpleName}: ${t.message}"
                     DownloadState.logLine("FAIL  $msg")
                     DownloadState.error = shortError(msg)
                     DownloadState.status = DlStatus.FAIL
-                    notifyStopped(friendlyFailText(msg), url, fmt, title)
+                    notifyStopped("Download fail ho gaya", notifFailBody(msg), url, fmt, title)
                 }
             } finally {
                 wakeLock?.let { if (it.isHeld) it.release() }
@@ -201,7 +202,7 @@ class DownloadService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
     }
 
-    private fun buildNotif(text: String, pct: Int): Notification {
+    private fun buildNotif(head: String, text: String, pct: Int): Notification {
         val cancelPi = PendingIntent.getService(
             this, 0,
             Intent(this, DownloadService::class.java).setAction(ACTION_CANCEL),
@@ -214,8 +215,8 @@ class DownloadService : Service() {
         ).build()
         val b = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("Chaman Downloader")
-            .setContentText(text)
+            .setContentTitle(head)
+            .setContentText(text.ifBlank { null })
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .addAction(action)
@@ -233,11 +234,11 @@ class DownloadService : Service() {
     private fun action(icon: Int, label: String, pi: PendingIntent): Notification.Action =
         Notification.Action.Builder(Icon.createWithResource(this, icon), label, pi).build()
 
-    private fun postResult(text: String, actions: List<Notification.Action>) {
+    private fun postResult(head: String, text: String, actions: List<Notification.Action>) {
         val b = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("Chaman Downloader")
-            .setContentText(text)
+            .setContentTitle(head)
+            .setContentText(text.ifBlank { null })
             .setStyle(Notification.BigTextStyle().bigText(text))
             .setContentIntent(appPi())
             .setAutoCancel(true)
@@ -268,11 +269,11 @@ class DownloadService : Service() {
             acts += action(android.R.drawable.ic_menu_share, "Share",
                 PendingIntent.getActivity(this, RC_SHARE, chooser, fl))
         }
-        postResult("Download ho gaya: $displayName", acts)
+        postResult("Download ho gaya", displayName, acts)
     }
 
     /** Fail ya cancel: [Retry] (wahi link, wahi quality). */
-    private fun notifyStopped(text: String, url: String, fmt: String, title: String) {
+    private fun notifyStopped(head: String, text: String, url: String, fmt: String, title: String) {
         val i = Intent(this, DownloadService::class.java)
             .putExtra(EXTRA_URL, url)
             .putExtra(EXTRA_FORMAT, fmt)
@@ -281,6 +282,6 @@ class DownloadService : Service() {
             this, RC_RETRY, i,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        postResult(text, listOf(action(android.R.drawable.ic_menu_rotate, "Retry", pi)))
+        postResult(head, text, listOf(action(android.R.drawable.ic_menu_rotate, "Retry", pi)))
     }
 }

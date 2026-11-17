@@ -116,6 +116,31 @@ fun notifProgressText(kind: String, pct: Double, speed: Double, eta: Double): St
     return parts.joinToString(" · ")
 }
 
+/** Notification title (halat ke hisaab se) aur body (progress). */
+fun notifProgressTitle(kind: String): String = when (kind) {
+    "video" -> "Video download ho raha hai"
+    "audio" -> "Audio download ho raha hai"
+    else -> "Download ho raha hai"
+}
+
+fun notifProgressBody(pct: Double, speed: Double, eta: Double): String {
+    val parts = ArrayList<String>()
+    if (pct >= 0.0) parts += "${pct.toInt()}%"
+    if (speed > 0.0) parts += fmtSpeed(speed)
+    if (eta >= 0.0) parts += "${fmtEta(eta)} bacha"
+    return parts.joinToString(" · ")
+}
+
+/** Fail notification ki body: title me "Download fail ho gaya" pehle se hai, isliye sirf kaaran. */
+fun notifFailBody(raw: String): String {
+    val t = friendlyFailText(raw)
+    return when {
+        t.startsWith("Download fail ho gaya: ") -> t.removePrefix("Download fail ho gaya: ")
+        t == "Download fail ho gaya. Retry karo." -> "Retry karo."
+        else -> t
+    }
+}
+
 /** Error (poora text) -> notification ke liye chhota Hinglish kaaran. */
 fun friendlyFailText(raw: String): String {
     val l = raw.lowercase(Locale.US)

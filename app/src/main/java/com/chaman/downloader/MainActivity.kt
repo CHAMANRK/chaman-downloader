@@ -191,6 +191,16 @@ private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug:
         }
     }
 
+    // Queue tab se hatne par sirf Completed card hatao (RUNNING / FAIL / CANCELLED rehte hain)
+    var prevPage by remember { mutableStateOf(pagerState.currentPage) }
+    LaunchedEffect(pagerState.currentPage) {
+        val p = pagerState.currentPage
+        if (prevPage == 1 && p != 1 && DownloadState.status == DlStatus.PASS) {
+            DownloadState.status = DlStatus.IDLE
+        }
+        prevPage = p
+    }
+
     var url by rememberSaveable { mutableStateOf("") }
     var info by remember { mutableStateOf<InfoState>(InfoState.None) }
 
