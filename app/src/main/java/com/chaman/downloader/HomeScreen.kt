@@ -35,11 +35,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.chaquo.python.Python
@@ -118,6 +121,20 @@ private fun fetchBitmap(u: String): Bitmap? {
     }
 }
 
+/** Search chalata hai aur state onInfo se bhejta hai (Home ka button + Share dono use karte hain). */
+suspend fun runSearch(u: String, onInfo: (InfoState) -> Unit) {
+    onInfo(InfoState.Loading)
+    try {
+        val raw = withContext(Dispatchers.IO) {
+            Python.getInstance().getModule("tests").callAttr("search", u).toString()
+        }
+        onInfo(InfoState.Ok(parseSearch(raw)))
+    } catch (t: Throwable) {
+        onInfo(InfoState.Err(errText(t)))
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun HomeScreen(
     url: String,
@@ -131,6 +148,12 @@ fun HomeScreen(
     val cs = MaterialTheme.colorScheme
     val busy = DownloadState.status == DlStatus.RUNNING
     val hasUrl = url.isNotBlank()
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    fun closeKeyboard() {
+        focus.clearFocus()
+        keyboard?.hide()
+    }
 
     fun start(title: String, fmt: String) {
         DownloadState.currentTitle = title
@@ -179,20 +202,12 @@ fun HomeScreen(
                         onUrl(t.trim())
                         onInfo(InfoState.None)
                     }
+                    closeKeyboard()
                 }, modifier = Modifier.weight(1f), height = 54.dp)
                 GoldButton("Search", onClick = {
+                    closeKeyboard()
                     val u = url.trim()
-                    scope.launch {
-                        onInfo(InfoState.Loading)
-                        try {
-                            val raw = withContext(Dispatchers.IO) {
-                                Python.getInstance().getModule("tests").callAttr("search", u).toString()
-                            }
-                            onInfo(InfoState.Ok(parseSearch(raw)))
-                        } catch (t: Throwable) {
-                            onInfo(InfoState.Err(errText(t)))
-                        }
-                    }
+                    scope.launch { runSearch(u, onInfo) }
                 }, modifier = Modifier.weight(1f), enabled = hasUrl && info !is InfoState.Loading)
             }
         }

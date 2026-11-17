@@ -1,9 +1,11 @@
 package com.chaman.downloader
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -71,7 +73,24 @@ class MainActivity : ComponentActivity() {
         if (!Python.isStarted()) {
             Python.start(AndroidPlatform(this))
         }
+        handleShare(intent)
         setContent { ChamanApp(this) }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleShare(intent)
+    }
+
+    private fun handleShare(i: Intent?) {
+        if (i?.action != Intent.ACTION_SEND) return
+        val u = urlFromShareIntent(i)
+        if (u != null) {
+            ShareInbox.pending = u
+        } else {
+            Toast.makeText(this, "Share me koi link nahi mila", Toast.LENGTH_SHORT).show()
+        }
     }
 }
 
@@ -149,6 +168,16 @@ private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug:
 
     fun goTo(i: Int) {
         scope.launch { pagerState.animateScrollToPage(i) }
+    }
+
+    // Share se link aaya: Home kholo, URL bharo, auto-search (download khud nahi hota)
+    LaunchedEffect(ShareInbox.pending) {
+        val p = ShareInbox.pending ?: return@LaunchedEffect
+        ShareInbox.pending = null
+        url = p
+        goTo(0)
+        // scope.launch: pending null hone se ye effect restart hota hai, search cancel na ho
+        scope.launch { runSearch(p) { info = it } }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
