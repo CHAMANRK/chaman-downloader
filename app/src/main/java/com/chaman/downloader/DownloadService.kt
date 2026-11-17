@@ -176,6 +176,8 @@ class DownloadService : Service() {
         values.put(MediaStore.Downloads.IS_PENDING, 0)
         resolver.update(uri, values, null, null)
         src.delete()
+        DownloadState.savedMime = extToMime(src.extension, audioOnly)
+        DownloadState.savedUri = uri.toString()
     }
 
     private fun ensureChannel() {

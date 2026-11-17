@@ -13,6 +13,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -147,8 +156,32 @@ fun ChamanApp(activity: ComponentActivity) {
 @Composable
 private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug: () -> Unit) {
     val ctx = LocalContext.current
+    val cs = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { TABS.size })
+
+    // Download complete: haptic + chhota "Saved" snackbar (Open action)
+    val snackbar = remember { SnackbarHostState() }
+    val haptic = LocalHapticFeedback.current
+    val dlStatus = DownloadState.status
+    var prevStatus by remember { mutableStateOf(dlStatus) }
+    LaunchedEffect(dlStatus) {
+        val was = prevStatus
+        prevStatus = dlStatus
+        if (was == DlStatus.RUNNING && dlStatus == DlStatus.PASS) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            val canOpen = DownloadState.savedUri != null
+            val r = snackbar.showSnackbar(
+                message = "Saved",
+                actionLabel = if (canOpen) "Open" else null,
+                duration = SnackbarDuration.Long
+            )
+            if (r == SnackbarResult.ActionPerformed) {
+                val u = DownloadState.savedUri
+                if (u != null) openMediaUri(ctx, android.net.Uri.parse(u), DownloadState.savedMime)
+            }
+        }
+    }
 
     var url by rememberSaveable { mutableStateOf("") }
     var info by remember { mutableStateOf<InfoState>(InfoState.None) }
@@ -203,9 +236,25 @@ private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug:
             }
         }
 
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(start = 20.dp, end = 20.dp, bottom = 88.dp),
+            snackbar = { data ->
+                Snackbar(
+                    snackbarData = data,
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = cs.surfaceVariant,
+                    contentColor = cs.onSurface,
+                    actionColor = cs.primary
+                )
+            }
+        )
+
         FloatingNav(
             pagerState = pagerState,
-            queueBusy = DownloadState.status == DlStatus.RUNNING,
             onSelect = { goTo(it) },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -219,11 +268,13 @@ private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug:
 @Composable
 private fun FloatingNav(
     pagerState: PagerState,
-    queueBusy: Boolean,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
+    // Yahin padhte hain taaki progress tick pe sirf nav recompose ho, poora shell nahi
+    val queueBusy = DownloadState.status == DlStatus.RUNNING
+    val queueProgress = DownloadState.progress
     Surface(
         modifier = modifier
             .padding(horizontal = 20.dp)
@@ -264,20 +315,41 @@ private fun FloatingNav(
                             ) { onSelect(i) },
                         contentAlignment = Alignment.Center
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                label,
-                                fontSize = 14.sp,
-                                fontWeight = if (closeness > 0.5f) FontWeight.SemiBold else FontWeight.Medium,
-                                color = lerp(cs.onSurfaceVariant, cs.primary, closeness)
-                            )
-                            if (i == 1 && queueBusy) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(cs.primary)
+                        val tint = lerp(cs.onSurfaceVariant, cs.primary, closeness)
+                        Column(
+                            modifier = Modifier.animateContentSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(1.dp)
+                        ) {
+                            Box(modifier = Modifier.size(22.dp)) {
+                                NavIcon(i, tint, Modifier.fillMaxSize())
+                                if (i == 1 && queueBusy) {
+                                    val ringMod = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .offset(x = 7.dp, y = (-5).dp)
+                                        .size(12.dp)
+                                    if (queueProgress >= 0f) {
+                                        CircularProgressIndicator(
+                                            progress = { queueProgress },
+                                            modifier = ringMod,
+                                            color = cs.primary,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        CircularProgressIndicator(
+                                            modifier = ringMod,
+                                            color = cs.primary,
+                                            strokeWidth = 2.dp
+                                        )
+                                    }
+                                }
+                            }
+                            if (closeness > 0.5f) {
+                                Text(
+                                    label,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = tint
                                 )
                             }
                         }

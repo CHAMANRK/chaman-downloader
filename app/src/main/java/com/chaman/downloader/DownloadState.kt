@@ -17,6 +17,8 @@ object DownloadState {
     var log by mutableStateOf("")
     var currentTitle by mutableStateOf("") // UI set karta hai (info title ya URL)
     var error by mutableStateOf("") // FAIL par chhota, padhne layak message (poora error log me)
+    var savedUri by mutableStateOf<String?>(null) // PASS par MediaStore uri (snackbar "Open" ke liye)
+    var savedMime by mutableStateOf("*/*")
     @Volatile var startedAt: Long = 0L
 
     private val fmt = SimpleDateFormat("HH:mm:ss", Locale.US)
@@ -27,6 +29,7 @@ object DownloadState {
         line = ""
         log = ""
         error = ""
+        savedUri = null
         startedAt = System.currentTimeMillis()
         logLine("start")
     }

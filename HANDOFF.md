@@ -15,11 +15,11 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 - `app/src/main/python/tests.py` - `env_info`, `ytdlp_version`, `yt_info`, `download(url, outdir, cb)`
 - `.../FfmpegProbe.kt` - FFmpeg version + convert (reflection se FFmpegKit)
 - `.../DownloadService.kt` - foreground service: wake lock, notification (progress + Cancel), Python download, MediaStore save (`Download/Chaman/`)
-- `.../MainActivity.kt` (Phase 1) - sirf Activity + `ChamanApp` (theme, edge-to-edge) + `MainShell` (HorizontalPager, 4 tab) + `FloatingNav` (floating pill, sliding indicator)
+- `.../MainActivity.kt` (Phase 1) - sirf Activity + `ChamanApp` (theme, edge-to-edge) + `MainShell` (HorizontalPager, 4 tab; download PASS pe haptic + "Saved" snackbar with Open) + `FloatingNav` (floating pill, sliding indicator, icon + selected label, Queue icon pe progress ring)
 - `.../Theme.kt` (luxury palette: warm black+champagne gold / ivory+bronze, serif headlines, `Prefs` theme), `.../Ui.kt` (LuxCard, GoldButton, QuietButton, PageTitle)
-- `.../HomeScreen.kt` (URL, Paste, Search, result: details + quality-wise Download), `QueueScreen.kt`, `LibraryScreen.kt` (MediaStore `Download/Chaman`), `SettingsScreen.kt` (theme, battery exempt, Debug)
+- `.../HomeScreen.kt` (URL + clear (X) + Paste + Search; result: `ResultHeader` (duration badge, meta line, Details toggle), `SegToggle` Video|Audio, `QualityList` select, sticky Download bar; `runSearch()`), `.../ShareInbox.kt` (Share menu link: `ShareInbox`, `extractFirstUrl`, `normalizeLinkInput`; tests `ShareTest.kt`), `QueueScreen.kt`, `LibraryScreen.kt` (MediaStore `Download/Chaman`; search + All/Video/Audio chips, thumbnail pe duration badge + play overlay, `openMediaUri`), `LibraryFilter.kt` (`libMatches`, tests `LibraryFilterTest.kt`), `NavIcons.kt` (4 Canvas nav icon), `SettingsScreen.kt` (theme, battery exempt, Debug)
 - `.../DebugScreen.kt` - purana Phase 0 test screen (T1-T6), Settings > Engine tests (Debug) se khulta hai
-- `.../DownloadState.kt` - service/UI shared state + timestamped log
+- `.../DownloadState.kt` - service/UI shared state + timestamped log (+ `savedUri`/`savedMime` PASS ke baad)
 - `.../Format.kt` - pure helpers: `fmtSpeed`, `fmtBytes`, `fmtEta`, `formatProgressLine`, `safeFileName` (+ `FormatTest.kt`)
 - `.../Mime.kt` + `app/src/test/.../MimeTest.kt` - pure function + unit test
 - `.github/workflows/build.yml` - unit tests, assembleDebug, `BUILD_INFO.txt` (sab versions)
@@ -57,14 +57,16 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 
 - Step D v0.4.4-share (device pe pass, user ne confirm kiya; tag v0.4.4): (1) Share menu se link: manifest me `ACTION_SEND text/plain` filter + MainActivity `launchMode=singleTask`, `onNewIntent`. `ShareInbox.kt`: `extractFirstUrl` (shared text me pehla http(s) link, trailing punctuation trim) + `ShareTest.kt`. Link aane par Home khulta hai, URL bharta hai, auto-search chalta hai (download khud start nahi hota). Link na mile to Toast. (2) Paste ya Search button ke baad keyboard band (`focusManager.clearFocus` + `keyboardController.hide`). Search logic ab `runSearch()` (HomeScreen.kt) me, Home button aur Share dono use karte hain.
   - Device test checklist: YouTube Share > Chaman (app band ho to bhi, app khula ho to bhi), Instagram reel Share > Chaman, bina link wala text share, Paste/Search pe keyboard close.
-  - UI/UX ideas list (baaki): result screen halka (chips + ek sticky Download), smart paste chip, queue card me thumbnail + clean progress, library search/filter/multi-select (delete/share), nav icons, success snackbar.
 
 - Step E v0.4.5-ytclient (device pe pass, user ne confirm kiya, tag v0.4.5; mobile data pe YouTube download + Instagram dono chale; log me `[client=default]` aaya, yani fallback chain (tv/android_vr/web_embedded) abhi unproven kyunki us baar block nahi aaya): Problem: mobile data (Airtel) pe YouTube bot-check ("Sign in to confirm you're not a bot"): Search me title aata tha par formats nahi (isliye sirf "Best available"), Download FAIL. Wi-Fi pe sab theek; Termux ke yt-dlp se data pe bhi chalta hai (karan unverified: Termux me shayad newer yt-dlp / node JS runtime; app me Chaquopy pe JS runtime nahi). Fix: `tests.py` me `_YT_CLIENTS = [default, tv, android_vr, web_embedded]` chain, `search()` aur `download()` dono me (sirf YouTube URL pe; baaki sites pe pehle jaisa). Jo client chala wo `_client_memo[url]` me yaad rehta hai taaki download wahi format ids use kare. Sab fail ho to saaf Hinglish message (`BOT_MSG` / `NO_FORMATS_MSG`) + details. `DownloadState.error` (+ `shortError`) se Queue card me FAIL ke neeche chhota message. Log me `[client=...]` dikhta hai. Client names ka koi guarantee nahi: real device (data pe) test se verify karna hai; list `_YT_CLIENTS` me badli ja sakti hai. Cookies import abhi nahi (last option agar chain data pe fail ho).
   - Known chhota issue: vertical video (Shorts) ka label height se banta hai ("1920p" dikhta hai, asli 1080p). Fix: Step F (v0.4.6) me kiya, device test pending.
   - (purani) Device test checklist: data pe wahi Shorts link (Search me multiple options aaye, download chale), Wi-Fi pe dubara (regression), Instagram link (regression), Queue FAIL me chhota message.
 
-- Step F v0.4.6-ui (CODE LIKHA, device test pending): (1) Result screen halka: thumbnail pe duration badge, title, ek line me channel · views · date, "Details" toggle (likes, site, poora description). (2) Quality ab select hoti hai (radio rows, default "Best available") + "Video | Audio" toggle (audio na ho to toggle nahi), neeche ek sticky gold "Download · {quality} · ~size" bar (floating nav ke upar). Purane har-row Download buttons hata diye. (3) Link field: jab text ho to X (clear) button; `normalizeLinkInput` (ShareInbox.kt): newline hata, 2000 char cap, ek saath 20+ char paste ho (Paste button / keyboard paste) aur link ho to sirf pehla link rakhta hai (pehle lamba text field me bahut door scroll ho jata tha). (4) Vertical video label fix: `_q()` (tests.py) chhoti side leta hai, Shorts ab "1080p" (pehle "1920p"). Tests: `ShareTest.kt` (normalizeLinkInput), Python label logic fake-formats se check kiya.
+- Step F v0.4.6-ui (device pe pass, user ne confirm kiya "All Pass"; tag v0.4.6): (1) Result screen halka: thumbnail pe duration badge, title, ek line me channel · views · date, "Details" toggle (likes, site, poora description). (2) Quality ab select hoti hai (radio rows, default "Best available") + "Video | Audio" toggle (audio na ho to toggle nahi), neeche ek sticky gold "Download · {quality} · ~size" bar (floating nav ke upar). Purane har-row Download buttons hata diye. (3) Link field: jab text ho to X (clear) button; `normalizeLinkInput` (ShareInbox.kt): newline hata, 2000 char cap, ek saath 20+ char paste ho (Paste button / keyboard paste) aur link ho to sirf pehla link rakhta hai (pehle lamba text field me bahut door scroll ho jata tha). (4) Vertical video label fix: `_q()` (tests.py) chhoti side leta hai, Shorts ab "1080p" (pehle "1920p"). Tests: `ShareTest.kt` (normalizeLinkInput), Python label logic fake-formats se check kiya.
   - Device test checklist: Shorts link (label 1080p, duration badge, selection + sticky button, Audio tab me m4a/webm download), normal horizontal video (1080p/720p), Instagram link (audio toggle na aaye to theek), lamba text paste (Paste button aur keyboard paste dono) -> sirf link bache, X button se clear, swipe left me field bahut door na jaye.
+
+- Step G v0.4.7-polish (CODE LIKHA, device test pending): 4 chhote kaam ek saath. (1) Library: search bar (+ X clear, keyboard Search pe band) + filter chips All/Video/Audio (`libMatches`), match na ho to "Koi match nahi" card. (2) Library item: thumbnail pe chhota play overlay + duration badge (MediaMetadataRetriever, cache). (3) Nav: har tab ka icon (Canvas), sirf selected ka label; Queue icon pe chhota progress ring (busy dot hata). (4) Download complete (RUNNING->PASS) pe haptic + "Saved" snackbar, "Open" action file kholta hai (`DownloadState.savedUri`). Tests: `LibraryFilterTest.kt`.
+  - Device test checklist: Library me search (naam ka hissa, capital/small), X clear, All/Video/Audio chips, koi match na ho to card; video item pe duration + play icon, audio item pe bhi; nav me 4 icon + selected ka label, swipe me smooth; download chalte waqt Queue icon pe ring (progress ke saath bhadhe), khatam hone pe ring gayab; download complete pe halka vibration + "Saved" snackbar, Open dabao to file khule; dark + light dono theme.
 
 ## Design findings / known risks
 - yt-dlp ko FFmpeg binary nahi milta (FFmpeg JNI library hai), isliye merge yt-dlp se nahi hoga. Design: Python `download()` video aur audio alag files me laata hai, Kotlin `FfmpegProbe.merge` se `-c copy` merge (mp4+m4a ho to .mp4, warna .mkv). Yahi pattern final app me bhi chalega (max quality ke liye zaroori). Pre-merged progressive streams YouTube pe ab kam/koi nahi hote.
@@ -73,7 +75,29 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 - Instagram bina login ke kabhi block/rate-limit kar sakta hai (abhi pass).
 - Unverified: mp3 encoder (libmp3lame), H.264/H.265 encoder (free tier me nahi ho sakta), Phase 4 se pehle check.
 
+## UI/UX ideas (is session me diye gaye; status)
+Done:
+- Share se download (Share menu me Chaman, auto-search): v0.4.4, device pe pass
+- Keyboard Paste/Search ke baad band: v0.4.4, pass
+- Result screen halka (duration badge, meta line, Details, quality select + Video|Audio toggle + sticky Download): v0.4.6, pass
+- Link field: clear (X) button + lamba paste normalize (sirf link, 2000 char cap): v0.4.6, pass
+- Shorts label "1080p" (chhoti side): v0.4.6, pass
+- YouTube bot-check fallback (player client chain) + Queue me saaf error: v0.4.5, pass (data pe `[client=default]` chala; fallback chain abhi unproven)
+
+Baaki (user ne 10th hata diya; Smart Paste chip bhi user ne hata diya; order meri suggestion):
+1. ~~Smart Paste chip~~: user ne hata diya (extra feature nahi chahiye)
+2. Queue card: thumbnail + clean progress (circular/ring), speed + ETA readable ("12 MB/s · 2 min bacha"); monospace line aur log "Details" me chhupao
+3. Queue multi-item: disabled Download ki jagah queue me add ("Queued #2"); Phase 2 (Room) ke saath; UI abhi se multi-item list ke hisaab se
+4. Library: search bar + filter chips - v0.4.7 me (test pending). Long-press multi-select (Delete / Share) - agla step, v0.4.7 device pe pass hone ke baad (Android 10+ delete ke liye system permission popup handle karna hoga; Medium-Zyada code). Sirf kaam karne wale buttons (fake nahi)
+5. Library item: duration badge + chhota play overlay - v0.4.7 me (test pending)
+6. Nav: icons + label (sirf selected ka), Queue pe progress ring - v0.4.7 me (test pending)
+7. Success pe haptic + chhota "Saved" snackbar ("Open" action) - v0.4.7 me (test pending); "Library me dekho" card abhi bhi hai (hataya nahi)
+8. (idea 10 = Home empty state hint/recent thumbnails: user ne nahi liya)
+User decision (is session): Queue card (2) aur Queue multi-item (3) abhi chhod diye; sirf "kam code" wale kaam (Library search/filter, badge+overlay, nav icons+ring, haptic+snackbar) v0.4.7 me, phir Library multi-select (Delete/Share).
+
 ## Baaki kaam
-1. ~~Batch C~~ done (device pe pass)
-2. Phase 1: base UI (Home / Queue / Library / Settings) - v0.4.0 device test pending, phir refine (luxury polish)
-3. Phase 2+: yt-dlp integration proper, download manager (Room, queue, pause/resume), FFmpeg tools, Instagram/universal, optimization
+1. ~~Batch C~~, ~~Phase 1 base UI~~, ~~Step A~~, ~~logo + permanent key~~, ~~Step B~~, ~~Step D~~, ~~Step E~~, ~~Step F~~ - sab device pe pass
+2. Step G v0.4.7-polish: device test pending (checklist upar). Pass hone ke baad hi agla step.
+3. Agla (G pass ke baad): Library long-press multi-select (Delete / Share). Pehle concept user se confirm.
+4. Chhode hue (user ne abhi nahi bola): Smart Paste chip, Queue card redesign, Queue multi-item, Step C (download folder select), Phase 2+ (Room download manager), FFmpeg tools, Instagram/universal, optimization
+5. Known: YouTube fallback chain (tv/android_vr/web_embedded) unproven (bot-check dobara aaye to dekhna); mp3 abhi nahi (libmp3lame unverified); 1080p option kabhi Premium/m3u8 format chun sakta hai (abhi problem nahi aayi; aaye to https-only filter)
