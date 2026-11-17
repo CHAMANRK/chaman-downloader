@@ -15,8 +15,8 @@ android {
         applicationId = "com.chaman.downloader"
         minSdk = 29 // MediaStore.Downloads (scoped storage) ke liye Android 10+
         targetSdk = 34
-        versionCode = 20
-        versionName = "0.4.15-ffdiag"
+        versionCode = 21
+        versionName = "0.4.16-smartexc"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -74,6 +74,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     // Community-maintained FFmpegKit fork, audio package (LGPL, lame included). Same com.arthenica.ffmpegkit API.
     implementation("dev.ffmpegkit-maintained:ffmpeg-kit-audio:$ffmpegkitVersion")
+    // ffmpeg-kit-audio ka POM ye helper saath nahi laata (v0.4.15 device: NoClassDefFoundError com.arthenica.smartexception.java.Exceptions)
+    implementation("com.arthenica:smart-exception-java:0.2.1")
 
     testImplementation("junit:junit:4.13.2")
 }
