@@ -19,8 +19,8 @@ import java.io.File
 
 /** Python side is object ko call karta hai (progress + cancel check). */
 class ProgressCb(private val onP: (Double, String) -> Unit) {
-    fun onProgress(pct: Double, text: String) {
-        onP(pct, text)
+    fun onStats(pct: Double, kind: String, done: Double, total: Double, speed: Double, eta: Double) {
+        onP(pct, formatProgressLine(kind, done, total, speed, eta))
     }
 
     fun isCancelled(): Boolean = DownloadService.cancelRequested
@@ -119,13 +119,15 @@ class DownloadService : Service() {
                 } else {
                     src = File(parts.getString(0))
                 }
-                DownloadState.logLine("ready: ${src.name} (${src.length()} bytes), MediaStore me save")
-                saveToDownloads(src)
+                val displayName = safeFileName(json.optString("title", ""), json.getString("id")) +
+                    "." + src.extension
+                DownloadState.logLine("ready: $displayName (${src.length()} bytes), MediaStore me save")
+                saveToDownloads(src, displayName)
                 val secs = (System.currentTimeMillis() - DownloadState.startedAt) / 1000
-                DownloadState.logLine("PASS in ${secs}s -> Download/Chaman/${src.name}")
+                DownloadState.logLine("PASS in ${secs}s -> Download/Chaman/$displayName")
                 DownloadState.progress = 1f
                 DownloadState.status = DlStatus.PASS
-                notifyDone("Download complete: ${src.name}")
+                notifyDone("Download complete: $displayName")
             } catch (t: Throwable) {
                 outDir.listFiles()?.forEach { it.delete() }
                 if (cancelRequested) {
@@ -154,9 +156,9 @@ class DownloadService : Service() {
         super.onDestroy()
     }
 
-    private fun saveToDownloads(src: File) {
+    private fun saveToDownloads(src: File, displayName: String) {
         val values = ContentValues().apply {
-            put(MediaStore.Downloads.DISPLAY_NAME, src.name)
+            put(MediaStore.Downloads.DISPLAY_NAME, displayName)
             put(MediaStore.Downloads.MIME_TYPE, extToMime(src.extension))
             put(MediaStore.Downloads.RELATIVE_PATH, "Download/Chaman")
             put(MediaStore.Downloads.IS_PENDING, 1)

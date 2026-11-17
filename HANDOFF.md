@@ -20,6 +20,7 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 - `.../HomeScreen.kt` (URL, Paste, Info dekho, Download), `QueueScreen.kt`, `LibraryScreen.kt` (MediaStore `Download/Chaman`), `SettingsScreen.kt` (theme, battery exempt, Debug)
 - `.../DebugScreen.kt` - purana Phase 0 test screen (T1-T6), Settings > Engine tests (Debug) se khulta hai
 - `.../DownloadState.kt` - service/UI shared state + timestamped log
+- `.../Format.kt` - pure helpers: `fmtSpeed`, `fmtBytes`, `fmtEta`, `formatProgressLine`, `safeFileName` (+ `FormatTest.kt`)
 - `.../Mime.kt` + `app/src/test/.../MimeTest.kt` - pure function + unit test
 - `.github/workflows/build.yml` - unit tests, assembleDebug, `BUILD_INFO.txt` (sab versions)
 
@@ -46,7 +47,12 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
   - 0.7: yt-dlp ab `gradle.properties` me pinned 2026.10.26; CI default pinned version uthata hai, PyPI latest sirf info ke liye print hota hai; unit test CI me chalta hai
   - "Reproducible" ka matlab yahan: same pinned versions. Bit-for-bit identical APK ka claim nahi. GitHub Actions major tags (@v4) pinned hain, commit SHA nahi.
 
-- Phase 1 (base UI) v0.4.0: CODE LIKHA, device test pending. Home/Queue/Library/Settings + floating nav + swipe pager. Queue abhi sirf ek current download dikhata hai (Room queue Phase 2). Library tap = file open (ACTION_VIEW). Quality default / delete / share abhi nahi (fake button nahi rakhna).
+- Phase 1 (base UI) v0.4.0: device pe pass (user ne confirm kiya, tag v0.4.0). Home/Queue/Library/Settings + floating nav + swipe pager. Queue abhi sirf ek current download dikhata hai (Room queue Phase 2). Library tap = file open (ACTION_VIEW). Quality default / delete / share abhi nahi (fake button nahi rakhna).
+
+- Phase 1 improvements (user request, 3 steps):
+  - Step A v0.4.1 (CODE LIKHA, device test pending): file naam = video title (`safeFileName`, illegal chars hata, 180 UTF-8 bytes limit; duplicate naam par Android khud (1) lagata hai), speed auto unit (1024 KB/s se upar MB/s) + ETA + size (`Format.kt`, unit tests `FormatTest.kt`), Library me thumbnail (loadThumbnail, fallback first frame; audio ke liye placeholder). Python `download` ab `cb.onStats(...)` call karta hai aur JSON me `title` deta hai.
+  - Step B (baaki): Search button (Info ki jagah) -> poori detail (thumbnail, title, channel, duration, date, views, likes, description) + har quality ke saath apna Download button + audio-only options. mp3 abhi nahi (libmp3lame unverified).
+  - Step C (baaki): Settings me Download folder select (default `Download/Chaman`, Change via folder picker, default pe wapas). Library chuna hua folder dikhayegi.
 
 ## Design findings / known risks
 - yt-dlp ko FFmpeg binary nahi milta (FFmpeg JNI library hai), isliye merge yt-dlp se nahi hoga. Design: Python `download()` video aur audio alag files me laata hai, Kotlin `FfmpegProbe.merge` se `-c copy` merge (mp4+m4a ho to .mp4, warna .mkv). Yahi pattern final app me bhi chalega (max quality ke liye zaroori). Pre-merged progressive streams YouTube pe ab kam/koi nahi hote.

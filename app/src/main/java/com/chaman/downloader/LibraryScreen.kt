@@ -4,11 +4,19 @@ import android.content.ActivityNotFoundException
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
+import android.util.Size
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
@@ -26,9 +34,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,10 +84,67 @@ private fun queryLibrary(ctx: Context): List<LibItem> {
     return out
 }
 
-private fun fmtSize(b: Long): String = when {
-    b >= 1_000_000_000L -> "%.2f GB".format(b / 1_000_000_000.0)
-    b >= 1_000_000L -> "%.1f MB".format(b / 1_000_000.0)
-    else -> "%d KB".format(b / 1000)
+private val thumbCache = android.util.LruCache<Long, Bitmap>(40)
+
+/** Pehle system thumbnail, na mile to video ka first frame. Audio files ke liye null. */
+private fun loadThumb(ctx: Context, f: LibItem): Bitmap? {
+    thumbCache.get(f.id)?.let { return it }
+    if (f.mime.startsWith("audio")) return null
+    val uri = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, f.id)
+    var bmp: Bitmap? = try {
+        ctx.contentResolver.loadThumbnail(uri, Size(320, 180), null)
+    } catch (t: Throwable) {
+        null
+    }
+    if (bmp == null) {
+        val r = MediaMetadataRetriever()
+        try {
+            r.setDataSource(ctx, uri)
+            bmp = r.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        } catch (t: Throwable) {
+            bmp = null
+        } finally {
+            try {
+                r.release()
+            } catch (t: Throwable) {
+            }
+        }
+    }
+    if (bmp != null) thumbCache.put(f.id, bmp)
+    return bmp
+}
+
+@Composable
+private fun Thumb(f: LibItem) {
+    val ctx = LocalContext.current
+    val cs = MaterialTheme.colorScheme
+    val bmp by produceState<Bitmap?>(initialValue = thumbCache.get(f.id), f.id) {
+        if (value == null) value = withContext(Dispatchers.IO) { loadThumb(ctx, f) }
+    }
+    Box(
+        modifier = Modifier
+            .width(104.dp)
+            .height(58.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(cs.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        val b = bmp
+        if (b != null) {
+            Image(
+                bitmap = b.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Text(
+                f.name.substringAfterLast('.', "").lowercase(),
+                style = MaterialTheme.typography.labelLarge,
+                color = cs.onSurfaceVariant
+            )
+        }
+    }
 }
 
 @Composable
@@ -151,23 +220,24 @@ fun LibraryScreen(active: Boolean) {
                 border = BorderStroke(1.dp, cs.outlineVariant)
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Thumb(f)
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(f.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(
                             dateFmt.format(Date(f.dateSec * 1000)),
                             style = MaterialTheme.typography.bodyMedium,
                             color = cs.onSurfaceVariant
                         )
+                        Text(
+                            fmtBytes(f.size.toDouble()),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = cs.primary
+                        )
                     }
-                    Text(
-                        fmtSize(f.size),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = cs.primary,
-                        modifier = Modifier.padding(start = 12.dp)
-                    )
                 }
             }
         }

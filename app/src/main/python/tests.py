@@ -77,10 +77,10 @@ def _formats_summary(url, base_opts):
 def download(url, outdir, cb):
     """Asli download (Phase 0 Batch C, background stability test).
 
-    cb ek Kotlin object hai: cb.onProgress(pct, text), cb.isCancelled().
+    cb ek Kotlin object hai: cb.onStats(pct, kind, done, total, speed, eta), cb.isCancelled().
     yt-dlp ko FFmpeg binary nahi milta (FFmpeg JNI library hai), isliye video
     aur audio alag files me download hote hain; merge Kotlin side se hota hai.
-    Returns JSON: {"files": [...], "id", "merge_ext", "desc"}
+    Returns JSON: {"files": [...], "id", "title", "merge_ext", "desc"}
       files me 1 path (single stream) ya 2 paths [video, audio].
     """
     import yt_dlp
@@ -134,9 +134,14 @@ def download(url, outdir, cb):
             else:
                 pct = -1.0
             speed = d.get("speed") or 0
-            cb.onProgress(
+            eta = d.get("eta")
+            cb.onStats(
                 float(min(pct, 100.0)) if pct >= 0 else -1.0,
-                "%s %.1f / %.1f MB @ %.0f KB/s" % (kind, done / 1e6, tot / 1e6, speed / 1e3),
+                kind,
+                float(done),
+                float(tot),
+                float(speed),
+                float(eta) if eta is not None else -1.0,
             )
 
         opts = dict(
@@ -164,6 +169,6 @@ def download(url, outdir, cb):
         for f in reqs
     )
     return json.dumps(
-        {"files": paths, "id": vid, "merge_ext": merge_ext, "desc": desc},
+        {"files": paths, "id": vid, "title": info.get("title") or vid, "merge_ext": merge_ext, "desc": desc},
         ensure_ascii=False,
     )
