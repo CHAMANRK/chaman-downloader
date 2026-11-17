@@ -133,6 +133,11 @@ def download(url, outdir, cb, fmt=""):
     """
     import yt_dlp
 
+    # Step M: "mp3|<format id>" = audio download, mp3 conversion Kotlin (FFmpeg) karega.
+    to_mp3 = fmt.startswith("mp3|")
+    if to_mp3:
+        fmt = fmt[4:]
+
     base_opts = {
         "quiet": True,
         "no_warnings": True,
@@ -237,7 +242,8 @@ def download(url, outdir, cb, fmt=""):
         desc += " [client=%s]" % (client_used or "default")
     return json.dumps(
         {"files": paths, "id": vid, "title": info.get("title") or vid, "merge_ext": merge_ext, "desc": desc,
-         "has_video": any(f.get("vcodec") not in (None, "none") for f in reqs)},
+         "has_video": any(f.get("vcodec") not in (None, "none") for f in reqs) and not to_mp3,
+         "to_mp3": to_mp3},
         ensure_ascii=False,
     )
 

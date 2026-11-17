@@ -91,6 +91,7 @@ fun TestScreen() {
     val t4 = remember { TestState("T4 Instagram") }
     val t5 = remember { TestState("T5a FFmpeg version") }
     val t6 = remember { TestState("T5b FFmpeg convert") }
+    val t7 = remember { TestState("T5c MP3 encoder") }
 
     var ytUrl by remember { mutableStateOf("https://www.youtube.com/watch?v=jNQXAC9IVRw") }
     var igUrl by remember { mutableStateOf("https://www.instagram.com/reel/DfzzfBLiVrH/") }
@@ -138,6 +139,9 @@ fun TestScreen() {
         TestCard("Test 5a: FFmpeg native -version", t5) { scope.runTest(t5) { FfmpegProbe.version() } }
         TestCard("Test 5b: FFmpeg tone to m4a convert", t6) {
             scope.runTest(t6) { FfmpegProbe.convert(ctx.cacheDir) }
+        }
+        TestCard("Test 5c: libmp3lame, tone to mp3 convert", t7) {
+            scope.runTest(t7) { FfmpegProbe.convertMp3(ctx.cacheDir) }
         }
 
         // ---- Batch C: background download stability ----

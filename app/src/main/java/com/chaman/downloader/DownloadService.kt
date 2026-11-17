@@ -134,6 +134,14 @@ class DownloadService : Service() {
                     FfmpegProbe.merge(v, a, src)
                     v.delete()
                     a.delete()
+                } else if (json.optBoolean("to_mp3", false)) {
+                    val a = File(parts.getString(0))
+                    DownloadState.logLine("download done: audio ${a.length()} B. mp3 convert...")
+                    DownloadState.line = "MP3 bana rahe hain..."
+                    nm.notify(NOTIF_ID, buildNotif("MP3 bana rahe hain", DownloadState.currentTitle, -1))
+                    src = File(outDir, json.getString("id") + ".mp3")
+                    FfmpegProbe.toMp3(a, src)
+                    a.delete()
                 } else {
                     src = File(parts.getString(0))
                 }

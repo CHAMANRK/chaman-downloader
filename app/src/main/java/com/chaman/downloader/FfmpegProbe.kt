@@ -47,4 +47,43 @@ object FfmpegProbe {
         check(out.exists() && out.length() > 0) { "output file nahi bani ya khaali hai" }
         return "OK: ${out.name}, ${out.length()} bytes"
     }
+
+    @Volatile
+    private var mp3Cache: Boolean? = null
+
+    /** Is FFmpeg build me libmp3lame encoder hai ya nahi (ek baar check, cache). */
+    fun hasMp3Encoder(): Boolean {
+        mp3Cache?.let { return it }
+        val r = try {
+            val (ok, logs) = exec("-hide_banner -encoders")
+            ok && logs.contains("libmp3lame")
+        } catch (t: Throwable) {
+            false
+        }
+        mp3Cache = r
+        return r
+    }
+
+    /** Audio file ko mp3 (192 kbps, CBR) me badalna; video stream hataya jata hai. */
+    fun toMp3(src: File, out: File) {
+        out.delete()
+        val cmd = "-y -i \"${src.absolutePath}\" -vn -c:a libmp3lame -b:a 192k -id3v2_version 3 \"${out.absolutePath}\""
+        val (ok, logs) = exec(cmd)
+        check(ok) { "mp3 convert fail:\n" + logs.takeLast(800) }
+        check(out.exists() && out.length() > 0) { "mp3 file nahi bani ya khaali hai" }
+    }
+
+    /** Debug test: 2 sec ki tone ko mp3 me convert. */
+    fun convertMp3(cacheDir: File): String {
+        val enc = hasMp3Encoder()
+        check(enc) { "libmp3lame encoder is FFmpeg build me NAHI hai (mp3 possible nahi)" }
+        val tmp = File(cacheDir, "probe_tone_src.m4a")
+        tmp.delete()
+        val (ok1, l1) = exec("-y -f lavfi -i sine=frequency=440:duration=2 -c:a aac -b:a 128k \"${tmp.absolutePath}\"")
+        check(ok1) { "tone bananay me fail:\n" + l1.takeLast(500) }
+        val out = File(cacheDir, "probe_tone.mp3")
+        toMp3(tmp, out)
+        tmp.delete()
+        return "OK: libmp3lame hai, ${out.name}, ${out.length()} bytes"
+    }
 }

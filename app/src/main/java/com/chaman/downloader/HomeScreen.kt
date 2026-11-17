@@ -133,6 +133,17 @@ private fun fetchBitmap(u: String): Bitmap? {
     }
 }
 
+/** Audio options ke baad "MP3" option jodta hai, sirf jab FFmpeg me libmp3lame ho. Source = best m4a (pehla audio option). */
+private fun addMp3Option(d: SearchResult): SearchResult {
+    if (d.audios.isEmpty() || !FfmpegProbe.hasMp3Encoder()) return d
+    val src = d.audios.first()
+    val mp3 = QualityOpt("Audio MP3", "192 kbps", src.size, mp3Fmt(src.fmt))
+    return SearchResult(
+        d.title, d.uploader, d.duration, d.date, d.views, d.likes, d.site,
+        d.description, d.thumb, d.videos, d.audios + mp3
+    )
+}
+
 /** Search chalata hai aur state onInfo se bhejta hai (Home ka button + Share dono use karte hain). */
 suspend fun runSearch(u: String, onInfo: (InfoState) -> Unit) {
     onInfo(InfoState.Loading)
@@ -140,7 +151,9 @@ suspend fun runSearch(u: String, onInfo: (InfoState) -> Unit) {
         val raw = withContext(Dispatchers.IO) {
             Python.getInstance().getModule("tests").callAttr("search", u).toString()
         }
-        onInfo(InfoState.Ok(parseSearch(raw)))
+        val data = parseSearch(raw)
+        val withMp3 = withContext(Dispatchers.IO) { addMp3Option(data) }
+        onInfo(InfoState.Ok(withMp3))
     } catch (t: Throwable) {
         onInfo(InfoState.Err(errText(t)))
     }

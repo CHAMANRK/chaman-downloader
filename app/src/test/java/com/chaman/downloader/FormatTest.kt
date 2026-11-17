@@ -1,6 +1,8 @@
 package com.chaman.downloader
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FormatTest {
@@ -113,5 +115,13 @@ class FormatTest {
         assertEquals("Retry karo.", notifFailBody(""))
         assertEquals("Requested format is not available", notifFailBody("PyException: RuntimeError: Requested format is not available"))
         assertEquals("Internet me problem aayi. Net check karke Retry karo.", notifFailBody("Unable to resolve host x"))
+    }
+
+    @Test
+    fun mp3FormatMarker() {
+        assertEquals("mp3|140", mp3Fmt("140"))
+        assertTrue(isMp3Fmt("mp3|140"))
+        assertFalse(isMp3Fmt("140"))
+        assertFalse(isMp3Fmt(""))
     }
 }

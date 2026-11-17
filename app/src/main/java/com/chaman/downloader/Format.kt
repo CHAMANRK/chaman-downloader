@@ -162,3 +162,11 @@ fun friendlyFailText(raw: String): String {
         }
     }
 }
+
+/** MP3 option ka format marker: "mp3|<yt-dlp audio format id>". Python download() ye prefix pehchanta hai. */
+const val MP3_PREFIX = "mp3|"
+
+fun mp3Fmt(sourceFmt: String): String = MP3_PREFIX + sourceFmt
+
+fun isMp3Fmt(fmt: String): Boolean = fmt.startsWith(MP3_PREFIX)
+
