@@ -9,17 +9,37 @@ import java.io.File
 object FfmpegProbe {
     private const val CLS = "com.arthenica.ffmpegkit.FFmpegKit"
 
-    private fun exec(cmd: String): Pair<Boolean, String> {
-        val cls = try {
-            Class.forName(CLS)
-        } catch (e: ClassNotFoundException) {
-            throw IllegalStateException("$CLS nahi mila - fork ka package alag ho sakta hai")
+    /** Reflection wrapper hata ke asli error (cause chain): class naam + message + upar ki 3 stack lines. */
+    private fun rootText(t: Throwable): String {
+        var c: Throwable = t
+        val chain = StringBuilder()
+        var depth = 0
+        while (depth < 6) {
+            chain.append(c.javaClass.name).append(": ").append(c.message ?: "null").append('\n')
+            c = c.cause ?: break
+            depth++
         }
-        val session = cls.getMethod("execute", String::class.java).invoke(null, cmd)!!
-        val rc = session.javaClass.getMethod("getReturnCode").invoke(session)!!
-        val ok = rc.javaClass.getMethod("isValueSuccess").invoke(rc) as Boolean
-        val logs = session.javaClass.getMethod("getAllLogsAsString").invoke(session) as? String ?: ""
-        return ok to logs
+        val top = c.stackTrace.take(3).joinToString("\n") { "  at $it" }
+        return chain.toString().trim() + (if (top.isNotEmpty()) "\n$top" else "")
+    }
+
+    private fun exec(cmd: String): Pair<Boolean, String> {
+        try {
+            val cls = try {
+                Class.forName(CLS)
+            } catch (e: ClassNotFoundException) {
+                throw IllegalStateException("$CLS nahi mila - fork ka package alag ho sakta hai")
+            }
+            val session = cls.getMethod("execute", String::class.java).invoke(null, cmd)!!
+            val rc = session.javaClass.getMethod("getReturnCode").invoke(session)!!
+            val ok = rc.javaClass.getMethod("isValueSuccess").invoke(rc) as Boolean
+            val logs = session.javaClass.getMethod("getAllLogsAsString").invoke(session) as? String ?: ""
+            return ok to logs
+        } catch (e: IllegalStateException) {
+            throw e
+        } catch (t: Throwable) {
+            throw IllegalStateException("FFmpegKit call fail. Asli error:\n" + rootText(t))
+        }
     }
 
     fun version(): String {
