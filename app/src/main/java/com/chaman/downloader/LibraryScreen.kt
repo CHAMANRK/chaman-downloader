@@ -7,6 +7,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.util.Size
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.widget.Toast
 import android.net.Uri
@@ -92,7 +93,15 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class LibItem(val id: Long, val name: String, val size: Long, val dateSec: Long, val mime: String)
+class LibItem(
+    val id: Long,
+    val name: String,
+    val size: Long,
+    val dateSec: Long,
+    val mime: String,
+    val uri: Uri,
+    val saf: Boolean = false
+)
 
 private fun queryLibrary(ctx: Context): List<LibItem> {
     val out = ArrayList<LibItem>()
@@ -117,11 +126,16 @@ private fun queryLibrary(ctx: Context): List<LibItem> {
                     name = c.getString(1) ?: "(no name)",
                     size = c.getLong(2),
                     dateSec = c.getLong(3),
-                    mime = c.getString(4) ?: "*/*"
+                    mime = c.getString(4) ?: "*/*",
+                    uri = mediaUri(c.getLong(0))
                 )
             )
         }
     }
+    // Chune hue Save folder ki files (Video/ + Audio/), purani MediaStore files ke saath
+    val seen = out.map { it.name + "|" + it.size }.toHashSet()
+    out.addAll(SaveFolder.listItems(ctx).filter { (it.name + "|" + it.size) !in seen })
+    out.sortByDescending { it.dateSec }
     return out
 }
 
@@ -159,15 +173,21 @@ private fun grantFor(ctx: Context, e: SecurityException, uris: List<Uri>, delete
     throw e
 }
 
-private fun deleteItems(ctx: Context, ids: List<Long>): NeedsGrant? {
+private fun deleteItems(ctx: Context, items: List<LibItem>): NeedsGrant? {
     val denied = ArrayList<Uri>()
     var first: SecurityException? = null
-    for (id in ids) {
-        val u = mediaUri(id)
+    for (f in items) {
         try {
-            ctx.contentResolver.delete(u, null, null)
+            if (f.saf) {
+                if (!DocumentsContract.deleteDocument(ctx.contentResolver, f.uri)) {
+                    throw IllegalStateException("Delete nahi hua: ${f.name}")
+                }
+            } else {
+                ctx.contentResolver.delete(f.uri, null, null)
+            }
         } catch (e: SecurityException) {
-            denied.add(u)
+            if (f.saf) throw e
+            denied.add(f.uri)
             if (first == null) first = e
         }
     }
@@ -175,8 +195,13 @@ private fun deleteItems(ctx: Context, ids: List<Long>): NeedsGrant? {
     return grantFor(ctx, err, denied, true)
 }
 
-private fun renameItem(ctx: Context, id: Long, newName: String): NeedsGrant? {
-    val u = mediaUri(id)
+private fun renameItem(ctx: Context, item: LibItem, newName: String): NeedsGrant? {
+    if (item.saf) {
+        DocumentsContract.renameDocument(ctx.contentResolver, item.uri, newName)
+            ?: throw IllegalStateException("Rename nahi hua")
+        return null
+    }
+    val u = item.uri
     val v = ContentValues().apply { put(MediaStore.Downloads.DISPLAY_NAME, newName) }
     try {
         val n = ctx.contentResolver.update(u, v, null, null)
@@ -189,7 +214,7 @@ private fun renameItem(ctx: Context, id: Long, newName: String): NeedsGrant? {
 
 private fun shareItems(ctx: Context, items: List<LibItem>) {
     if (items.isEmpty()) return
-    val uris = ArrayList(items.map { mediaUri(it.id) })
+    val uris = ArrayList(items.map { it.uri })
     val i = if (items.size == 1) {
         Intent(Intent.ACTION_SEND).setType(items[0].mime).putExtra(Intent.EXTRA_STREAM, uris[0])
     } else {
@@ -211,7 +236,7 @@ private val durCache = android.util.LruCache<Long, Long>(200)
 /** Duration ms me (0 = pata nahi). Cache me rakhta hai taaki scroll pe dobara na nikale. */
 private fun loadDurationMs(ctx: Context, f: LibItem): Long {
     durCache.get(f.id)?.let { return it }
-    val uri = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, f.id)
+    val uri = f.uri
     val r = MediaMetadataRetriever()
     var ms = 0L
     try {
@@ -233,7 +258,7 @@ private fun loadDurationMs(ctx: Context, f: LibItem): Long {
 private fun loadThumb(ctx: Context, f: LibItem): Bitmap? {
     thumbCache.get(f.id)?.let { return it }
     if (f.mime.startsWith("audio")) return null
-    val uri = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, f.id)
+    val uri = f.uri
     var bmp: Bitmap? = try {
         ctx.contentResolver.loadThumbnail(uri, Size(320, 180), null)
     } catch (t: Throwable) {
@@ -518,11 +543,11 @@ fun LibraryScreen(active: Boolean) {
         selected = emptySet()
     }
 
-    fun doDelete(ids: List<Long>) {
+    fun doDelete(targets: List<LibItem>) {
         scope.launch {
             try {
-                val g = withContext(Dispatchers.IO) { deleteItems(ctx, ids) }
-                if (g == null) finished("Delete ho gaya") else launchGrant(g) { doDelete(ids) }
+                val g = withContext(Dispatchers.IO) { deleteItems(ctx, targets) }
+                if (g == null) finished("Delete ho gaya") else launchGrant(g) { doDelete(targets) }
             } catch (t: Throwable) {
                 Toast.makeText(ctx, errText(t), Toast.LENGTH_LONG).show()
             }
@@ -532,7 +557,7 @@ fun LibraryScreen(active: Boolean) {
     fun doRename(item: LibItem, newName: String) {
         scope.launch {
             try {
-                val g = withContext(Dispatchers.IO) { renameItem(ctx, item.id, newName) }
+                val g = withContext(Dispatchers.IO) { renameItem(ctx, item, newName) }
                 if (g == null) finished("Rename ho gaya") else launchGrant(g) { doRename(item, newName) }
             } catch (t: Throwable) {
                 Toast.makeText(ctx, errText(t), Toast.LENGTH_LONG).show()
@@ -628,7 +653,7 @@ fun LibraryScreen(active: Boolean) {
                         .clip(shape)
                         .combinedClickable(
                             onClick = {
-                                if (selecting) toggle(f.id) else openMediaUri(ctx, mediaUri(f.id), f.mime)
+                                if (selecting) toggle(f.id) else openMediaUri(ctx, f.uri, f.mime)
                             },
                             onLongClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -731,9 +756,9 @@ fun LibraryScreen(active: Boolean) {
                 items = deleteTargets,
                 onDismiss = { deleteTargets = emptyList() },
                 onConfirm = {
-                    val ids = deleteTargets.map { it.id }
+                    val targets = deleteTargets
                     deleteTargets = emptyList()
-                    doDelete(ids)
+                    doDelete(targets)
                 }
             )
         }

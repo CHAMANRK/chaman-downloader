@@ -13,6 +13,7 @@ import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.IBinder
 import android.os.PowerManager
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import com.chaquo.python.PyException
 import com.chaquo.python.Python
@@ -149,9 +150,9 @@ class DownloadService : Service() {
                     "." + src.extension
                 DownloadState.logLine("ready: $displayName (${src.length()} bytes), MediaStore me save")
                 nm.notify(NOTIF_ID, buildNotif("File save ho rahi hai", displayName, -1))
-                saveToDownloads(src, displayName, !json.optBoolean("has_video", true))
+                val dest = saveFile(src, displayName, json.optBoolean("has_video", true))
                 val secs = (System.currentTimeMillis() - DownloadState.startedAt) / 1000
-                DownloadState.logLine("PASS in ${secs}s -> Download/Chaman/$displayName")
+                DownloadState.logLine("PASS in ${secs}s -> $dest/$displayName")
                 DownloadState.progress = 1f
                 DownloadState.status = DlStatus.PASS
                 notifyPass(displayName)
@@ -184,11 +185,49 @@ class DownloadService : Service() {
         super.onDestroy()
     }
 
-    private fun saveToDownloads(src: File, displayName: String, audioOnly: Boolean) {
+    /** Chune Save folder me (Video/ ya Audio/); na chuna ho ya na mile to default Download/Chaman/<Video|Audio>. Dest label deta hai. */
+    private fun saveFile(src: File, displayName: String, hasVideo: Boolean): String {
+        val sub = subDirFor(hasVideo)
+        val tree = SaveFolder.treeUri(this)
+        if (tree != null) {
+            try {
+                saveToTree(tree, sub, src, displayName, !hasVideo)
+                return SaveFolder.label(this) + "/" + sub
+            } catch (t: Throwable) {
+                DownloadState.logLine("Chuna folder nahi chala (${t::class.java.simpleName}: ${t.message}), default Download/Chaman me save")
+            }
+        }
+        saveToDownloads(src, displayName, !hasVideo, sub)
+        return "Download/Chaman/$sub"
+    }
+
+    private fun saveToTree(tree: Uri, sub: String, src: File, displayName: String, audioOnly: Boolean) {
+        val dir = SaveFolder.subDir(this, tree, sub, create = true)
+            ?: throw IllegalStateException("$sub folder nahi bana")
+        val mime = safCreateMime(src.extension, extToMime(src.extension, audioOnly))
+        val uri = DocumentsContract.createDocument(contentResolver, dir, mime, displayName)
+            ?: throw IllegalStateException("File nahi bani")
+        try {
+            contentResolver.openOutputStream(uri, "w")!!.use { out ->
+                src.inputStream().use { it.copyTo(out) }
+            }
+        } catch (t: Throwable) {
+            try {
+                DocumentsContract.deleteDocument(contentResolver, uri)
+            } catch (e: Throwable) {
+            }
+            throw t
+        }
+        src.delete()
+        DownloadState.savedMime = extToMime(src.extension, audioOnly)
+        DownloadState.savedUri = uri.toString()
+    }
+
+    private fun saveToDownloads(src: File, displayName: String, audioOnly: Boolean, sub: String) {
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, displayName)
             put(MediaStore.Downloads.MIME_TYPE, extToMime(src.extension, audioOnly))
-            put(MediaStore.Downloads.RELATIVE_PATH, "Download/Chaman")
+            put(MediaStore.Downloads.RELATIVE_PATH, "Download/Chaman/$sub")
             put(MediaStore.Downloads.IS_PENDING, 1)
         }
         val resolver = contentResolver

@@ -5,6 +5,9 @@ import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +62,21 @@ fun SettingsScreen(
         }
         owner.lifecycle.addObserver(obs)
         onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+
+    var saveLabel by remember { mutableStateOf(SaveFolder.label(ctx)) }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            try {
+                ctx.contentResolver.takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                SaveFolder.set(ctx, uri)
+                saveLabel = SaveFolder.label(ctx)
+            } catch (e: Exception) {
+                Toast.makeText(ctx, "Folder permission nahi mili: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     val version = remember {
@@ -128,7 +146,27 @@ fun SettingsScreen(
         }
 
         LuxCard {
-            Text("Files saved in Download/Chaman", style = MaterialTheme.typography.titleMedium)
+            Text("Save folder", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "$saveLabel  (Video/ aur Audio/ andar khud bante hain)",
+                style = MaterialTheme.typography.bodyMedium,
+                color = cs.onSurfaceVariant
+            )
+            GoldButton("Folder chuno", onClick = { pickFolder.launch(null) })
+            if (SaveFolder.treeUri(ctx) != null) {
+                QuietButton("Default (Download/Chaman) pe wapas", onClick = {
+                    SaveFolder.treeUri(ctx)?.let { old ->
+                        try {
+                            ctx.contentResolver.releasePersistableUriPermission(
+                                old, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                            )
+                        } catch (e: Exception) {
+                        }
+                    }
+                    SaveFolder.set(ctx, null)
+                    saveLabel = SaveFolder.label(ctx)
+                })
+            }
         }
 
         QuietButton("Engine tests (Debug)", onClick = onOpenDebug)
