@@ -170,7 +170,7 @@ class DownloadService : Service() {
                     val msg = if (t is PyException) "PyException: ${t.message}"
                     else "${t::class.java.simpleName}: ${t.message}"
                     DownloadState.logLine("FAIL  $msg")
-                    DownloadState.error = shortError(msg)
+                    DownloadState.error = queueErrorText(msg)
                     DownloadState.status = DlStatus.FAIL
                     notifyStopped("Download fail ho gaya", notifFailBody(msg), url, fmt, title)
                 }

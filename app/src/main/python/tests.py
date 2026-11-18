@@ -148,7 +148,7 @@ def _formats_summary(url, base_opts):
     return "\n".join(lines) if lines else "(koi format nahi mila)"
 
 
-def download(url, outdir, cb, fmt=""):
+def _download_impl(url, outdir, cb, fmt=""):
     """Asli download (Phase 0 Batch C, background stability test).
 
     cb ek Kotlin object hai: cb.onStats(pct, kind, done, total, speed, eta), cb.isCancelled().
@@ -366,7 +366,7 @@ def _build_options(fmts):
     return videos, audios
 
 
-def search(url):
+def _search_impl(url):
     """Metadata + quality options (download nahi). JSON return."""
     import yt_dlp
 
@@ -420,3 +420,104 @@ def search(url):
         "audios": audios,
     }
     return json.dumps(result, ensure_ascii=False)
+
+
+# ---------------- v0.4.20: Instagram cookies diagnostic ----------------
+# Instagram link fail ho to error ke neeche ek line: file/sessionid/loaded count + session check HTTP code.
+# Cookie values kabhi output me nahi aati (sirf count, haan/nahi, status code).
+
+_IG_CHECK_URL = "https://www.instagram.com/api/v1/accounts/current_user/?edit=true"
+_IG_APP_ID = "936619743392459"
+_IG_UA = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36"
+
+
+def _read_cookie_pairs(path):
+    """Netscape file -> [(name, value)] instagram.com cookies. Parse fail ho to bhi crash nahi."""
+    pairs = []
+    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            line = line.rstrip("\r\n")
+            if line.startswith("#HttpOnly_"):
+                line = line[len("#HttpOnly_"):]
+            elif line.startswith("#") or not line.strip():
+                continue
+            f = line.split("\t")
+            if len(f) != 7:
+                continue
+            if "instagram.com" not in f[0]:
+                continue
+            pairs.append((f[5], f[6]))
+    return pairs
+
+
+def _session_check(pairs):
+    """current_user API ko cookies ke saath ek request. Sirf status code (ya error ka naam) return."""
+    import urllib.error
+    import urllib.request
+
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+
+    names = dict(pairs)
+    headers = {
+        "User-Agent": _IG_UA,
+        "X-IG-App-ID": _IG_APP_ID,
+        "Cookie": "; ".join("%s=%s" % (n, v) for n, v in pairs),
+        "Accept": "*/*",
+    }
+    if "csrftoken" in names:
+        headers["X-CSRFToken"] = names["csrftoken"]
+    req = urllib.request.Request(_IG_CHECK_URL, headers=headers)
+    try:
+        opener = urllib.request.build_opener(_NoRedirect)
+        with opener.open(req, timeout=10) as r:
+            return "HTTP %d" % r.status
+    except urllib.error.HTTPError as e:
+        return "HTTP %d" % e.code
+    except Exception as e:
+        return "error %s" % type(e).__name__
+
+
+def _cookie_diag(url):
+    """Instagram URL ke liye diagnostic line, warna None. Kabhi exception nahi uthata."""
+    import os
+
+    try:
+        if "instagram.com" not in url.lower():
+            return None
+        if not _cookie_dir:
+            return "cookies: folder set nahi hua"
+        src = os.path.join(_cookie_dir, "instagram.txt")
+        if not os.path.isfile(src):
+            return "cookies: file nahi mili, 0 loaded, sessionid: nahi, session check: skip"
+        pairs = _read_cookie_pairs(src)
+        has_sid = any(n == "sessionid" and v for n, v in pairs)
+        check = _session_check(pairs) if pairs else "skip"
+        return "cookies: file mili, %d loaded, sessionid: %s, session check: %s" % (
+            len(pairs), "haan" if has_sid else "nahi", check
+        )
+    except Exception as e:
+        return "cookies: diag error %s" % type(e).__name__
+
+
+def _with_diag(url, fn, *args):
+    import yt_dlp
+
+    try:
+        return fn(*args)
+    except yt_dlp.utils.DownloadCancelled:
+        raise
+    except Exception as e:
+        d = _cookie_diag(url)
+        if d is None:
+            raise
+        raise RuntimeError("%s\n%s" % (e, d)) from None
+
+
+def search(url):
+    return _with_diag(url, _search_impl, url)
+
+
+def download(url, outdir, cb, fmt=""):
+    return _with_diag(url, _download_impl, url, outdir, cb, fmt)

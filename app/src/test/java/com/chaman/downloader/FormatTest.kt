@@ -74,6 +74,16 @@ class FormatTest {
         assertEquals(201, shortError("a".repeat(500)).length)
     }
 
+    @Test fun queueErrorAddsCookiesLine() {
+        val raw = "PyException: RuntimeError: ERROR: [instagram:story] 1: You need to log in\ncookies: file mili, 11 loaded, sessionid: haan, session check: HTTP 200"
+        assertEquals(
+            "ERROR: [instagram:story] 1: You need to log in\ncookies: file mili, 11 loaded, sessionid: haan, session check: HTTP 200",
+            queueErrorText(raw)
+        )
+        assertEquals("", cookiesLine("PyException: boom"))
+        assertEquals("boom", queueErrorText("PyException: RuntimeError: boom"))
+    }
+
     @Test fun notifProgress() {
         assertEquals(
             "Video download ho raha hai · 45% · 2.50 MB/s · 1:15 bacha",

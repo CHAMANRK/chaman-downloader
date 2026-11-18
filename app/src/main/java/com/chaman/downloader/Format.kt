@@ -101,6 +101,17 @@ fun shortError(msg: String): String {
     return if (clean.length > 200) clean.take(200) + "…" else clean
 }
 
+/** v0.4.20 diagnostic: error text me "cookies: ..." line ho to wahi (Queue card me error ke neeche dikhane ke liye), warna "". */
+fun cookiesLine(msg: String): String =
+    msg.lineSequence().map { it.trim() }.firstOrNull { it.startsWith("cookies:") } ?: ""
+
+/** Queue card ka error text: chhota error + (Instagram pe) cookies diagnostic line. */
+fun queueErrorText(msg: String): String {
+    val base = shortError(msg)
+    val c = cookiesLine(msg)
+    return if (c.isEmpty() || base == c) base else base + "\n" + c
+}
+
 /** Notification ki progress line: "Video download ho raha hai · 45% · 12.00 MB/s · 2:10 bacha". */
 fun notifProgressText(kind: String, pct: Double, speed: Double, eta: Double): String {
     val what = when (kind) {

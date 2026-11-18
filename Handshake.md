@@ -5,6 +5,10 @@ pehle yahan likho, phir dono me copy karo, phir code. Dono zip me ye file honi c
 
 Handshake version: **1**   |   Last updated: Browser v0.3.0-handshake + Downloader v0.4.19-cookies
 
+## Status: PASS (device pe, 2026-11-18)
+LOGIN intent, Browser login + Export, IMPORT_COOKIES intent, Downloader ke receive checks (signature, authority), save aur Toast, Downloader ka front me aana: **sab chal raha hai**. Install flow (Downloader se Browser install) bhi is flow ka hissa tha.
+**Abhi proof nahi:** import ki hui Instagram cookies ko yt-dlp ne use karke story/reel khola ya nahi. Story link pe "You need to log in" aata hai; ye cookie use ka masla hai, handshake ka nahi. Details Downloader HANDOFF.md me ("Abhi ki situation").
+
 ## Apps
 | | Chaman Downloader | CHAMAN Cookie Browser |
 |---|---|---|
@@ -68,4 +72,4 @@ Handshake version: **1**   |   Last updated: Browser v0.3.0-handshake + Download
 - Background se activity start Android block kar sakta hai: install download background me poora ho to Downloader front me aate hi aage badhta hai.
 
 ## Changelog
-- v1: LOGIN + IMPORT_COOKIES, signature check, install flow, Instagram only.
+- v1: LOGIN + IMPORT_COOKIES, signature check, install flow, Instagram only. Device pe pass (2026-11-18).

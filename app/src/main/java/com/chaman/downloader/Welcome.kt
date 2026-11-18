@@ -1,6 +1,8 @@
 package com.chaman.downloader
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
@@ -8,6 +10,8 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
@@ -21,7 +25,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -37,6 +43,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,8 +66,14 @@ import kotlin.random.Random
 val WELCOME_PAGES: List<String> = listOf(
     "Welcome to Chaman Downloader",
     "Download all your videos & audios from here.",
-    "Made by Najeef\nRequested by Gulam Jilani"
+    "Made by Najeef\nRequested by Gulam Jilani",
+    // Notification page (index NOTIF_PAGE): fayde + "Notification on karo" button (permission nahi ho tab)
+    "Notification on rakho, speed aur progress dekh paoge.",
+    // Step P: aakhri page = Instagram cookies setup (Import + Skip), Next/tick nahi
+    "Instagram ke har tarah ke reels download karne ke liye cookies import karo.\nSkip kar sakte ho, par story jaisi cheezein download nahi kar paoge."
 )
+
+const val NOTIF_PAGE = 3
 
 /** Typing sound: code se synth (audio file nahi). Low "thock" = chhota thump + halka click. */
 class TypeSound {
@@ -155,12 +168,29 @@ fun WelcomeScreen(onDone: () -> Unit) {
     val buzz = remember { Buzz(ctx) }
     DisposableEffect(Unit) { onDispose { sound.release() } }
 
-    var page by remember { mutableStateOf(0) }
+    // rememberSaveable: Browser/installer se wapas aane par activity dobara bane to bhi setup page par hi rahe
+    var page by rememberSaveable { mutableStateOf(0) }
     var typedLen by remember { mutableStateOf(0) }
     var done by remember { mutableStateOf(false) }
     var skip by remember { mutableStateOf(false) }
 
     val last = page == WELCOME_PAGES.lastIndex
+
+    // Notification permission (Android 13+). Pehle se mili ho to button nahi dikhta.
+    fun notifGranted() = Build.VERSION.SDK_INT < 33 ||
+        ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    var notifOk by remember { mutableStateOf(notifGranted()) }
+    val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        notifOk = notifGranted()
+    }
+    val cookieVer = CookieStore.version
+    val hasCookies = remember(cookieVer) { CookieStore.count(ctx, "instagram") } > 0
+
+    // Setup page par cookies import ho gayi (Browser se IMPORT_COOKIES aaya): welcome khatam
+    val startTick = remember { CookieInbox.tick }
+    LaunchedEffect(CookieInbox.tick) {
+        if (CookieInbox.tick != startTick && last) onDone()
+    }
 
     BackHandler { if (page > 0 && done) { page -= 1 } }
 
@@ -206,7 +236,7 @@ fun WelcomeScreen(onDone: () -> Unit) {
                 val shown = if (p == page) full.take(typedLen) else full
                 Text(
                     shown,
-                    style = MaterialTheme.typography.headlineLarge,
+                    style = if (p >= NOTIF_PAGE) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineLarge,
                     color = cs.onBackground
                 )
             }
@@ -233,9 +263,59 @@ fun WelcomeScreen(onDone: () -> Unit) {
             }
         }
 
-        // Floating Next / tick
+        // Notification page: permission button (sirf jab mili nahi)
         AnimatedVisibility(
-            visible = done,
+            visible = done && page == NOTIF_PAGE && !notifOk,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(horizontal = 30.dp)
+                .padding(bottom = 120.dp),
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            GoldButton("Notification on karo", onClick = {
+                buzz.page()
+                notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            })
+        }
+
+        // Step P: setup page ke buttons (typing poori hone ke baad)
+        AnimatedVisibility(
+            visible = done && last,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(horizontal = 30.dp)
+                .padding(bottom = 96.dp),
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                GoldButton(
+                    CookieSetup.buttonLabel(hasCookies),
+                    onClick = {
+                        buzz.page()
+                        CookieSetup.onButton("instagram")
+                    },
+                    enabled = CookieSetup.buttonEnabled()
+                )
+                CookieSetup.error?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.error)
+                }
+                QuietButton(if (hasCookies) "Aage badho" else "Skip", onClick = {
+                    buzz.page()
+                    onDone()
+                })
+            }
+        }
+
+        // Floating Next (aakhri page par nahi)
+        AnimatedVisibility(
+            visible = done && !last,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
@@ -250,11 +330,11 @@ fun WelcomeScreen(onDone: () -> Unit) {
                     .background(cs.primary)
                     .clickable {
                         buzz.page()
-                        if (last) onDone() else page += 1
+                        page += 1
                     },
                 contentAlignment = Alignment.Center
             ) {
-                WelcomeGlyph(tick = last, tint = cs.onPrimary, modifier = Modifier.size(26.dp))
+                WelcomeGlyph(tick = false, tint = cs.onPrimary, modifier = Modifier.size(26.dp))
             }
         }
     }
