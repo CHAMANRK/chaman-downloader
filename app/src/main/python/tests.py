@@ -63,6 +63,33 @@ BOT_MSG = "YouTube ne is network ko rok diya (bot-check). Wi-Fi try karo ya thod
 NO_FORMATS_MSG = "YouTube ne is video ke formats nahi diye (bot-check ya restricted video). Wi-Fi try karo ya thodi der baad dubara."
 
 
+_cookie_dir = None
+
+
+def set_cookie_dir(path):
+    """Kotlin app start par cookie folder batata hai (filesDir/cookies)."""
+    global _cookie_dir
+    _cookie_dir = path
+    return "ok"
+
+
+def _cookie_opts(url):
+    """Instagram link + import ki hui cookies ho to yt-dlp ko cookiefile (copy) do. Values kabhi log nahi hoti."""
+    import os
+    import shutil
+
+    if "instagram.com" not in url.lower() or not _cookie_dir:
+        return {}
+    src = os.path.join(_cookie_dir, "instagram.txt")
+    if not os.path.isfile(src):
+        return {}
+    run_dir = os.path.join(_cookie_dir, "run")
+    os.makedirs(run_dir, exist_ok=True)
+    dst = os.path.join(run_dir, "instagram.txt")
+    shutil.copyfile(src, dst)  # yt-dlp close par file wapas likhta hai: original ko chhoona nahi
+    return {"cookiefile": dst}
+
+
 def _is_youtube(url):
     u = url.lower()
     return "youtube.com" in u or "youtu.be" in u
@@ -146,6 +173,7 @@ def download(url, outdir, cb, fmt=""):
         "retries": 5,
         "fragment_retries": 5,
     }
+    base_opts.update(_cookie_opts(url))
 
     info = None
     client_used = None
@@ -350,6 +378,7 @@ def search(url):
         "ignore_no_formats_error": True,
         "socket_timeout": 20,
     }
+    opts.update(_cookie_opts(url))
     info = None
     client_used = None
     last_err = None

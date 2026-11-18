@@ -82,14 +82,40 @@ class MainActivity : ComponentActivity() {
         if (!Python.isStarted()) {
             Python.start(AndroidPlatform(this))
         }
+        // Python ko cookie folder batao (Instagram links pe yt-dlp cookiefile ke liye)
+        try {
+            Python.getInstance().getModule("tests").callAttr("set_cookie_dir", CookieStore.dir(this).absolutePath)
+        } catch (e: Exception) {
+        }
         handleShare(intent)
+        if (savedInstanceState == null) handleCookies(intent)
         setContent { ChamanApp(this) }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        CookieSetup.onResume(this)
+    }
+
+    override fun onPause() {
+        CookieSetup.onPause(this)
+        super.onPause()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleShare(intent)
+        handleCookies(intent)
+    }
+
+    // Cookie Browser se aaya IMPORT_COOKIES intent (Handshake.md). Sab check CookieStore.importFrom me.
+    private fun handleCookies(i: Intent?) {
+        if (i?.action != CookieStore.ACTION_IMPORT) return
+        val uri = i.data ?: return
+        val r = CookieStore.importFrom(this, uri, i.getStringExtra("site") ?: "")
+        Toast.makeText(this, r.message, Toast.LENGTH_LONG).show()
+        if (r.ok) CookieInbox.tick++
     }
 
     private fun handleShare(i: Intent?) {
@@ -219,6 +245,11 @@ private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug:
 
     fun goTo(i: Int) {
         scope.launch { pagerState.animateScrollToPage(i) }
+    }
+
+    // Cookies import hui: Settings tab kholo (count wahin dikhta hai)
+    LaunchedEffect(CookieInbox.tick) {
+        if (CookieInbox.tick > 0) goTo(3)
     }
 
     // Share se link aaya: Home kholo, URL bharo, auto-search (download khud nahi hota)

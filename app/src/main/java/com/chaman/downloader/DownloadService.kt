@@ -115,6 +115,10 @@ class DownloadService : Service() {
             }
         }
 
+        cookieSiteForUrl(url)?.let { site ->
+            if (CookieStore.has(this, site)) DownloadState.logLine("cookies: $site import ki hui lagayi")
+        }
+
         worker = Thread {
             val outDir = File(filesDir, "dl").apply { mkdirs() }
             try {
