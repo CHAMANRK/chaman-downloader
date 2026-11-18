@@ -20,7 +20,7 @@ fun treeLabel(docId: String): String {
     }
 }
 
-/** Library me SAF file ka mime: Audio/ folder ki file hamesha audio/* dikhe (webm audio ka mime video/webm aata hai). */
+/** Library me SAF file ka mime: Audio/ folder ki file hamesha audio type ka dikhe (webm audio ka mime video/webm aata hai). */
 fun safLibMime(inAudioDir: Boolean, mime: String?, name: String): String {
     val m = (mime ?: "").ifBlank { extToMime(name.substringAfterLast('.', "")) }
     if (!inAudioDir || m.startsWith("audio")) return m
