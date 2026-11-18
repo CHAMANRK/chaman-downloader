@@ -450,8 +450,18 @@ def _read_cookie_pairs(path):
     return pairs
 
 
-def _session_check(pairs):
-    """current_user API ko cookies ke saath ek request. Sirf status code (ya error ka naam) return."""
+_FF_UA = "Mozilla/5.0 (Android 14; Mobile; rv:132.0) Gecko/132.0 Firefox/132.0"
+
+
+def _short_word(v):
+    """Server ka message chhota aur safe banao (sirf a-z 0-9 _ space, 30 char). Cookie value nahi aati."""
+    import re
+
+    return re.sub(r"[^A-Za-z0-9_ ]", "", str(v))[:30].strip()
+
+
+def _session_check(pairs, ua=None):
+    """current_user API ko cookies ke saath ek request. 'HTTP <code> (<message>)' ya 'error <Name>' return."""
     import urllib.error
     import urllib.request
 
@@ -461,7 +471,7 @@ def _session_check(pairs):
 
     names = dict(pairs)
     headers = {
-        "User-Agent": _IG_UA,
+        "User-Agent": ua or _IG_UA,
         "X-IG-App-ID": _IG_APP_ID,
         "Cookie": "; ".join("%s=%s" % (n, v) for n, v in pairs),
         "Accept": "*/*",
@@ -469,12 +479,25 @@ def _session_check(pairs):
     if "csrftoken" in names:
         headers["X-CSRFToken"] = names["csrftoken"]
     req = urllib.request.Request(_IG_CHECK_URL, headers=headers)
+
+    def word(body):
+        try:
+            d = json.loads(body.decode("utf-8", "replace"))
+            w = _short_word(d.get("message") or d.get("error_type") or d.get("status") or "")
+            return " (%s)" % w if w else ""
+        except Exception:
+            return ""
+
     try:
         opener = urllib.request.build_opener(_NoRedirect)
         with opener.open(req, timeout=10) as r:
-            return "HTTP %d" % r.status
+            return "HTTP %d%s" % (r.status, word(r.read(4096)))
     except urllib.error.HTTPError as e:
-        return "HTTP %d" % e.code
+        try:
+            body = e.read(4096)
+        except Exception:
+            body = b""
+        return "HTTP %d%s" % (e.code, word(body))
     except Exception as e:
         return "error %s" % type(e).__name__
 
@@ -493,9 +516,11 @@ def _cookie_diag(url):
             return "cookies: file nahi mili, 0 loaded, sessionid: nahi, session check: skip"
         pairs = _read_cookie_pairs(src)
         has_sid = any(n == "sessionid" and v for n, v in pairs)
+        has_uid = any(n == "ds_user_id" and v for n, v in pairs)
         check = _session_check(pairs) if pairs else "skip"
-        return "cookies: file mili, %d loaded, sessionid: %s, session check: %s" % (
-            len(pairs), "haan" if has_sid else "nahi", check
+        check_ff = _session_check(pairs, _FF_UA) if pairs else "skip"
+        return "cookies: file mili, %d loaded, sessionid: %s, ds_user_id: %s, session check: %s, firefox-UA: %s" % (
+            len(pairs), "haan" if has_sid else "nahi", "haan" if has_uid else "nahi", check, check_ff
         )
     except Exception as e:
         return "cookies: diag error %s" % type(e).__name__
