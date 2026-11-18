@@ -169,27 +169,29 @@ fun SettingsScreen(
             }
         }
 
-        val cookieVersion = CookieStore.version
-        val igCount = remember(cookieVersion) { CookieStore.count(ctx, "instagram") }
-        LuxCard {
-            Text("Instagram cookies", style = MaterialTheme.typography.titleMedium)
-            if (igCount > 0) {
-                Text(
-                    "$igCount cookies imported",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = cs.onSurfaceVariant
+        if (Flags.INSTAGRAM_COOKIES) {
+            val cookieVersion = CookieStore.version
+            val igCount = remember(cookieVersion) { CookieStore.count(ctx, "instagram") }
+            LuxCard {
+                Text("Instagram cookies", style = MaterialTheme.typography.titleMedium)
+                if (igCount > 0) {
+                    Text(
+                        "$igCount cookies imported",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = cs.onSurfaceVariant
+                    )
+                }
+                GoldButton(
+                    CookieSetup.buttonLabel(igCount > 0),
+                    onClick = { CookieSetup.onButton("instagram") },
+                    enabled = CookieSetup.buttonEnabled()
                 )
-            }
-            GoldButton(
-                CookieSetup.buttonLabel(igCount > 0),
-                onClick = { CookieSetup.onButton("instagram") },
-                enabled = CookieSetup.buttonEnabled()
-            )
-            if (igCount > 0 && CookieSetup.phase == SetupPhase.IDLE) {
-                QuietButton("Clear", onClick = { CookieStore.clear(ctx, "instagram") })
-            }
-            CookieSetup.error?.let {
-                Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.error)
+                if (igCount > 0 && CookieSetup.phase == SetupPhase.IDLE) {
+                    QuietButton("Clear", onClick = { CookieStore.clear(ctx, "instagram") })
+                }
+                CookieSetup.error?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.error)
+                }
             }
         }
 

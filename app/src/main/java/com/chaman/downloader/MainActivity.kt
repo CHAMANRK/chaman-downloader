@@ -84,7 +84,9 @@ class MainActivity : ComponentActivity() {
         }
         // Python ko cookie folder batao (Instagram links pe yt-dlp cookiefile ke liye)
         try {
-            Python.getInstance().getModule("tests").callAttr("set_cookie_dir", CookieStore.dir(this).absolutePath)
+            val py = Python.getInstance().getModule("tests")
+            py.callAttr("set_cookie_dir", CookieStore.dir(this).absolutePath)
+            py.callAttr("set_instagram_cookies_enabled", Flags.INSTAGRAM_COOKIES)
         } catch (e: Exception) {
         }
         handleShare(intent)
@@ -94,11 +96,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        CookieSetup.onResume(this)
+        if (Flags.INSTAGRAM_COOKIES) CookieSetup.onResume(this)
     }
 
     override fun onPause() {
-        CookieSetup.onPause(this)
+        if (Flags.INSTAGRAM_COOKIES) CookieSetup.onPause(this)
         super.onPause()
     }
 
@@ -111,6 +113,7 @@ class MainActivity : ComponentActivity() {
 
     // Cookie Browser se aaya IMPORT_COOKIES intent (Handshake.md). Sab check CookieStore.importFrom me.
     private fun handleCookies(i: Intent?) {
+        if (!Flags.INSTAGRAM_COOKIES) return
         if (i?.action != CookieStore.ACTION_IMPORT) return
         val uri = i.data ?: return
         val r = CookieStore.importFrom(this, uri, i.getStringExtra("site") ?: "")

@@ -63,14 +63,16 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /** Welcome pages ka text. Credit me "Gaya" nahi likhna (user ka rule). */
-val WELCOME_PAGES: List<String> = listOf(
+val WELCOME_PAGES: List<String> = listOfNotNull(
     "Welcome to Chaman Downloader",
     "Download all your videos & audios from here.",
     "Made by Najeef\nRequested by Gulam Jilani",
     // Notification page (index NOTIF_PAGE): fayde + "Notification on karo" button (permission nahi ho tab)
     "Notification on rakho, speed aur progress dekh paoge.",
-    // Step P: aakhri page = Instagram cookies setup (Import + Skip), Next/tick nahi
-    "Instagram ke har tarah ke reels download karne ke liye cookies import karo.\nSkip kar sakte ho, par story jaisi cheezein download nahi kar paoge."
+    // Step P: Instagram cookies setup page (Import + Skip). Flags.INSTAGRAM_COOKIES=false me ye page nahi aata.
+    if (Flags.INSTAGRAM_COOKIES)
+        "Instagram ke har tarah ke reels download karne ke liye cookies import karo.\nSkip kar sakte ho, par story jaisi cheezein download nahi kar paoge."
+    else null
 )
 
 const val NOTIF_PAGE = 3
@@ -175,6 +177,8 @@ fun WelcomeScreen(onDone: () -> Unit) {
     var skip by remember { mutableStateOf(false) }
 
     val last = page == WELCOME_PAGES.lastIndex
+    // Setup page (Instagram cookies) sirf flag on ho tab; warna aakhri page par tick se app me jao
+    val setupLast = last && Flags.INSTAGRAM_COOKIES
 
     // Notification permission (Android 13+). Pehle se mili ho to button nahi dikhta.
     fun notifGranted() = Build.VERSION.SDK_INT < 33 ||
@@ -189,7 +193,7 @@ fun WelcomeScreen(onDone: () -> Unit) {
     // Setup page par cookies import ho gayi (Browser se IMPORT_COOKIES aaya): welcome khatam
     val startTick = remember { CookieInbox.tick }
     LaunchedEffect(CookieInbox.tick) {
-        if (CookieInbox.tick != startTick && last) onDone()
+        if (Flags.INSTAGRAM_COOKIES && CookieInbox.tick != startTick && last) onDone()
     }
 
     BackHandler { if (page > 0 && done) { page -= 1 } }
@@ -282,7 +286,7 @@ fun WelcomeScreen(onDone: () -> Unit) {
 
         // Step P: setup page ke buttons (typing poori hone ke baad)
         AnimatedVisibility(
-            visible = done && last,
+            visible = done && setupLast,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
@@ -313,9 +317,9 @@ fun WelcomeScreen(onDone: () -> Unit) {
             }
         }
 
-        // Floating Next (aakhri page par nahi)
+        // Floating Next (aakhri page par tick; setup page par kuch nahi)
         AnimatedVisibility(
-            visible = done && !last,
+            visible = done && !setupLast,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
@@ -330,11 +334,11 @@ fun WelcomeScreen(onDone: () -> Unit) {
                     .background(cs.primary)
                     .clickable {
                         buzz.page()
-                        page += 1
+                        if (last) onDone() else page += 1
                     },
                 contentAlignment = Alignment.Center
             ) {
-                WelcomeGlyph(tick = false, tint = cs.onPrimary, modifier = Modifier.size(26.dp))
+                WelcomeGlyph(tick = last, tint = cs.onPrimary, modifier = Modifier.size(26.dp))
             }
         }
     }

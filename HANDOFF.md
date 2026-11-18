@@ -36,6 +36,14 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 - Repo hamesha public
 
 ## Status
+## v0.4.24-parked (2026-11-18) - Instagram cookies PARKED (CODE LIKHA, device test pending)
+- Step P (v0.4.21 welcome notification page + setup page) device pe PASS. v0.4.23-igios result: `ios check` HTTP 200 par message "Were sorry but something went wrong" (soft-block), story phir bhi fail. Story ke liye koi aur raasta chahiye, isliye abhi park (user decision).
+- `Flags.kt`: `Flags.INSTAGRAM_COOKIES = false`. Flag false me: (1) Welcome me setup page nahi (aakhri page = notification page, uspe tick -> app), (2) Settings me \"Instagram cookies\" card nahi, (3) `MainActivity` IMPORT_COOKIES handle + `CookieSetup.onResume/onPause` band, (4) `DownloadService` me \"cookies: ... lagayi\" log nahi, (5) Python: `set_instagram_cookies_enabled(False)` (Kotlin app start par bhejta hai) -> `_cookie_opts` {} , Instagram `_client_order` sirf default (ig:ios retry nahi), `_with_diag` seedha pass-through (error me `cookies:` line nahi). Reel/post public chalte hain (bina login).
+- Code delete nahi kiya (CookieStore, CookieSetup, Handshake.md, diag, `_IG_CLIENTS`). Wapas on: `Flags.INSTAGRAM_COOKIES = true`.
+- Device test checklist: (a) fresh install / Settings > Made by Najeef: 4 page (welcome, download, made by, notification), notification page pe tick -> Home, setup page nahi; (b) Settings me Instagram cookies card nahi; (c) Instagram reel/post link Search + Download chale; story link ab seedha plain yt-dlp error de (`cookies:` line nahi, expected); (d) YouTube + normal link regression; (e) purani imported cookies ho to bhi koi asar nahi.
+- Idea (ABHI NAHI BANANA): Auto Update Check page: GitHub Releases se hamesha check, update ho to bole. Production app aur test-stage versions alag rahenge; jis version ko production me push karenge sirf usi ka update aayega. Concept baad me confirm karke banana.
+
+## (purani status) v0.4.23-igios
 ## Abhi ki situation (Step O + P, v0.4.23-igios, 2026-11-18)
 - **Step O device pe PASS (user ne confirm kiya):** handshake (Browser install > Instagram login > Export > Downloader front me > Toast), normal Instagram reel/post download cookies ke saath, "Seedha best quality" path, `Clear` button, download log me "cookies: instagram import ki hui lagayi".
 - **UNRESOLVED:** Instagram **story** link ka Search fail: `[instagram:story] <id>: You need to log in to access this content...` (do alag story links, ek 9h purani live story). cookies.txt format yt-dlp 2026.10.26 sahi load karta hai (sandbox). Normal reel/post cookies se chal rahe hain, to cookies yt-dlp tak pahunch rahi hain; story-specific masla lagta hai (`InstagramStoryIE` `feed/reels_media` khali aane par ye message deta hai; Chaquopy me curl_cffi nahi, web-client jaisa TLS nahi).

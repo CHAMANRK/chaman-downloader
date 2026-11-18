@@ -115,7 +115,7 @@ class DownloadService : Service() {
             }
         }
 
-        cookieSiteForUrl(url)?.let { site ->
+        cookieSiteForUrl(url)?.takeIf { Flags.INSTAGRAM_COOKIES }?.let { site ->
             if (CookieStore.has(this, site)) DownloadState.logLine("cookies: $site import ki hui lagayi")
         }
 

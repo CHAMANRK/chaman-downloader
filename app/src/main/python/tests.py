@@ -64,6 +64,14 @@ NO_FORMATS_MSG = "YouTube ne is video ke formats nahi diye (bot-check ya restric
 
 
 _cookie_dir = None
+# Kotlin `Flags.INSTAGRAM_COOKIES` app start par batata hai. False = Instagram cookies + ig:ios retry + diag band (parked).
+_ig_cookies_enabled = False
+
+
+def set_instagram_cookies_enabled(on):
+    global _ig_cookies_enabled
+    _ig_cookies_enabled = bool(on)
+    return _ig_cookies_enabled
 
 
 def set_cookie_dir(path):
@@ -78,7 +86,7 @@ def _cookie_opts(url):
     import os
     import shutil
 
-    if "instagram.com" not in url.lower() or not _cookie_dir:
+    if not _ig_cookies_enabled or "instagram.com" not in url.lower() or not _cookie_dir:
         return {}
     src = os.path.join(_cookie_dir, "instagram.txt")
     if not os.path.isfile(src):
@@ -111,6 +119,8 @@ _IG_CLIENTS = [None, "ig:ios"]
 
 def _client_order(url):
     """Non-YouTube/Instagram: sirf default. YouTube/Instagram: yaad rakha client pehle, phir baaki."""
+    if _is_instagram(url) and not _ig_cookies_enabled:
+        return [None]
     if _is_instagram(url):
         order = list(_IG_CLIENTS)
         c = _client_memo.get(url)
@@ -548,6 +558,8 @@ def _cookie_diag(url):
 def _with_diag(url, fn, *args):
     import yt_dlp
 
+    if not _ig_cookies_enabled:
+        return fn(*args)
     try:
         return fn(*args)
     except yt_dlp.utils.DownloadCancelled:
