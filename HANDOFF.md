@@ -36,11 +36,12 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 - Repo hamesha public
 
 ## Status
-## v0.4.24-parked (2026-11-18) - Instagram cookies PARKED (CODE LIKHA, device test pending)
+## v0.4.24-parked (2026-11-18) - Instagram cookies PARKED (device pe pass, tag v0.4.24)
 - Step P (v0.4.21 welcome notification page + setup page) device pe PASS. v0.4.23-igios result: `ios check` HTTP 200 par message "Were sorry but something went wrong" (soft-block), story phir bhi fail. Story ke liye koi aur raasta chahiye, isliye abhi park (user decision).
 - `Flags.kt`: `Flags.INSTAGRAM_COOKIES = false`. Flag false me: (1) Welcome me setup page nahi (aakhri page = notification page, uspe tick -> app), (2) Settings me \"Instagram cookies\" card nahi, (3) `MainActivity` IMPORT_COOKIES handle + `CookieSetup.onResume/onPause` band, (4) `DownloadService` me \"cookies: ... lagayi\" log nahi, (5) Python: `set_instagram_cookies_enabled(False)` (Kotlin app start par bhejta hai) -> `_cookie_opts` {} , Instagram `_client_order` sirf default (ig:ios retry nahi), `_with_diag` seedha pass-through (error me `cookies:` line nahi). Reel/post public chalte hain (bina login).
 - Code delete nahi kiya (CookieStore, CookieSetup, Handshake.md, diag, `_IG_CLIENTS`). Wapas on: `Flags.INSTAGRAM_COOKIES = true`.
-- Device test checklist: (a) fresh install / Settings > Made by Najeef: 4 page (welcome, download, made by, notification), notification page pe tick -> Home, setup page nahi; (b) Settings me Instagram cookies card nahi; (c) Instagram reel/post link Search + Download chale; story link ab seedha plain yt-dlp error de (`cookies:` line nahi, expected); (d) YouTube + normal link regression; (e) purani imported cookies ho to bhi koi asar nahi.
+- DEVICE PE PASS: checklist (a)-(e) sab pass (user ne confirm kiya, 2026-11-18). Rollback: `git checkout v0.4.24` (dekhne ke liye) ya `git reset --hard v0.4.24`.
+- Device test checklist (pass): (a) fresh install / Settings > Made by Najeef: 4 page (welcome, download, made by, notification), notification page pe tick -> Home, setup page nahi; (b) Settings me Instagram cookies card nahi; (c) Instagram reel/post link Search + Download chale; story link ab seedha plain yt-dlp error de (`cookies:` line nahi, expected); (d) YouTube + normal link regression; (e) purani imported cookies ho to bhi koi asar nahi.
 - Idea (ABHI NAHI BANANA): Auto Update Check page: GitHub Releases se hamesha check, update ho to bole. Production app aur test-stage versions alag rahenge; jis version ko production me push karenge sirf usi ka update aayega. Concept baad me confirm karke banana.
 
 ## (purani status) v0.4.23-igios
@@ -146,6 +147,6 @@ User decision (is session): Queue card (2) aur Queue multi-item (3) abhi chhod d
 
 ## Baaki kaam
 1. ~~Batch C~~, ~~Phase 1 base UI~~, ~~Step A~~, ~~logo + permanent key~~, ~~Step B~~, ~~Step D~~, ~~Step E~~, ~~Step F~~, ~~Step G (ring ke alawa)~~ - device pe pass
-2. Step J, K, L: device pe pass. Step M v0.4.16-smartexc (device pe pass; v0.4.14 FAIL tha, missing smart-exception-java helper, v0.4.16 me fix). Step N v0.4.18-savefolder (folder + Video/Audio sub-dirs): device pe pass. Step O v0.4.19-cookies: handshake + reel/post cookies + Clear + log device pe pass; story link FAIL unresolved. v0.4.20-cookiediag (diagnostic + Step P welcome setup page): CODE LIKHA, device test pending.
+2. Step P + v0.4.24-parked: device pe pass. Step J, K, L: device pe pass. Step M v0.4.16-smartexc (device pe pass; v0.4.14 FAIL tha, missing smart-exception-java helper, v0.4.16 me fix). Step N v0.4.18-savefolder (folder + Video/Audio sub-dirs): device pe pass. Step O v0.4.19-cookies: handshake + reel/post cookies + Clear + log device pe pass; story link FAIL unresolved. v0.4.20-cookiediag (diagnostic + Step P welcome setup page): CODE LIKHA, device test pending.
 3. Chhode hue (user ne abhi nahi bola): Smart Paste chip, Queue card redesign, Queue multi-item, (Step C download folder select = pehle cancel, ab Step N me naye form me maanga), Phase 2+ (Room download manager), FFmpeg tools, Instagram/universal, optimization
 4. Known: YouTube fallback chain (tv/android_vr/web_embedded) unproven (bot-check dobara aaye to dekhna); mp3 Step M me bana, libmp3lame device pe verify hona baaki (Debug Test 5c); 1080p option kabhi Premium/m3u8 format chun sakta hai (abhi problem nahi aayi; aaye to https-only filter)
