@@ -100,8 +100,24 @@ def _is_bot_check(msg):
     return "not a bot" in m and "sign in" in m
 
 
+def _is_instagram(url):
+    return "instagram.com" in url.lower()
+
+
+# v0.4.23: Instagram web API (www.instagram.com/api/v1) non-browser TLS pe 400 de rahi hai (Chaquopy me
+# curl_cffi nahi). yt-dlp ka extractor arg app_id=ios mobile API (i.instagram.com) use karta hai: fallback.
+_IG_CLIENTS = [None, "ig:ios"]
+
+
 def _client_order(url):
-    """Non-YouTube: sirf default. YouTube: yaad rakha client pehle, phir baaki."""
+    """Non-YouTube/Instagram: sirf default. YouTube/Instagram: yaad rakha client pehle, phir baaki."""
+    if _is_instagram(url):
+        order = list(_IG_CLIENTS)
+        c = _client_memo.get(url)
+        if c in order:
+            order.remove(c)
+            order.insert(0, c)
+        return order
     if not _is_youtube(url):
         return [None]
     order = list(_YT_CLIENTS)
@@ -116,6 +132,8 @@ def _client_order(url):
 def _with_client(opts, client):
     if client is None:
         return dict(opts)
+    if client.startswith("ig:"):
+        return dict(opts, extractor_args={"instagram": {"app_id": [client[3:]]}})
     return dict(opts, extractor_args={"youtube": {"player_client": [client]}})
 
 
@@ -183,7 +201,7 @@ def _download_impl(url, outdir, cb, fmt=""):
             with yt_dlp.YoutubeDL(_with_client(dict(base_opts, format=fmt or FORMAT_SELECTOR), c)) as ydl:
                 info = ydl.extract_info(url, download=False)
             client_used = c
-            if _is_youtube(url):
+            if _is_youtube(url) or _is_instagram(url):
                 _client_memo[url] = c
             break
         except yt_dlp.utils.YoutubeDLError as e:
@@ -266,7 +284,7 @@ def _download_impl(url, outdir, cb, fmt=""):
         )
         for f in reqs
     )
-    if _is_youtube(url):
+    if _is_youtube(url) or _is_instagram(url):
         desc += " [client=%s]" % (client_used or "default")
     return json.dumps(
         {"files": paths, "id": vid, "title": info.get("title") or vid, "merge_ext": merge_ext, "desc": desc,
@@ -395,7 +413,7 @@ def _search_impl(url):
             continue
         info = got
         client_used = c
-        if _is_youtube(url):
+        if _is_youtube(url) or _is_instagram(url):
             _client_memo[url] = c
         break
     if info is None:
@@ -450,7 +468,8 @@ def _read_cookie_pairs(path):
     return pairs
 
 
-_FF_UA = "Mozilla/5.0 (Android 14; Mobile; rv:132.0) Gecko/132.0 Firefox/132.0"
+_IG_IOS_APP_ID = "124024574287414"
+_IG_IOS_CHECK_URL = "https://i.instagram.com/api/v1/accounts/current_user/?edit=true"
 
 
 def _short_word(v):
@@ -460,7 +479,7 @@ def _short_word(v):
     return re.sub(r"[^A-Za-z0-9_ ]", "", str(v))[:30].strip()
 
 
-def _session_check(pairs, ua=None):
+def _session_check(pairs, app_id=_IG_APP_ID, check_url=_IG_CHECK_URL):
     """current_user API ko cookies ke saath ek request. 'HTTP <code> (<message>)' ya 'error <Name>' return."""
     import urllib.error
     import urllib.request
@@ -471,14 +490,14 @@ def _session_check(pairs, ua=None):
 
     names = dict(pairs)
     headers = {
-        "User-Agent": ua or _IG_UA,
-        "X-IG-App-ID": _IG_APP_ID,
+        "User-Agent": _IG_UA,
+        "X-IG-App-ID": app_id,
         "Cookie": "; ".join("%s=%s" % (n, v) for n, v in pairs),
         "Accept": "*/*",
     }
     if "csrftoken" in names:
         headers["X-CSRFToken"] = names["csrftoken"]
-    req = urllib.request.Request(_IG_CHECK_URL, headers=headers)
+    req = urllib.request.Request(check_url, headers=headers)
 
     def word(body):
         try:
@@ -518,9 +537,9 @@ def _cookie_diag(url):
         has_sid = any(n == "sessionid" and v for n, v in pairs)
         has_uid = any(n == "ds_user_id" and v for n, v in pairs)
         check = _session_check(pairs) if pairs else "skip"
-        check_ff = _session_check(pairs, _FF_UA) if pairs else "skip"
-        return "cookies: file mili, %d loaded, sessionid: %s, ds_user_id: %s, session check: %s, firefox-UA: %s" % (
-            len(pairs), "haan" if has_sid else "nahi", "haan" if has_uid else "nahi", check, check_ff
+        check_ios = _session_check(pairs, _IG_IOS_APP_ID, _IG_IOS_CHECK_URL) if pairs else "skip"
+        return "cookies: file mili, %d loaded, sessionid: %s, ds_user_id: %s, web check: %s, ios check: %s" % (
+            len(pairs), "haan" if has_sid else "nahi", "haan" if has_uid else "nahi", check, check_ios
         )
     except Exception as e:
         return "cookies: diag error %s" % type(e).__name__
