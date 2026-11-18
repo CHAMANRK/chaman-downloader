@@ -97,10 +97,12 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (Flags.INSTAGRAM_COOKIES) CookieSetup.onResume(this)
+        Updater.onResume(this)
     }
 
     override fun onPause() {
         if (Flags.INSTAGRAM_COOKIES) CookieSetup.onPause(this)
+        Updater.onPause(this)
         super.onPause()
     }
 
@@ -185,6 +187,9 @@ fun ChamanApp(activity: ComponentActivity) {
                     onOpenWelcome = { showWelcome = true }
                 )
             }
+            // Auto update: app start par ek baar check; popup welcome ke beech nahi aata
+            LaunchedEffect(Unit) { Updater.check(ctx) }
+            if (!showWelcome) UpdateDialog()
         }
     }
 }

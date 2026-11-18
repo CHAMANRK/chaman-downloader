@@ -23,6 +23,8 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 - `.../DownloadState.kt` - service/UI shared state + timestamped log (+ `savedUri`/`savedMime` PASS ke baad)
 - `.../Format.kt` - pure helpers: `fmtSpeed`, `fmtBytes`, `fmtEta`, `formatProgressLine`, `safeFileName` (+ `FormatTest.kt`)
 - `.../Mime.kt` + `app/src/test/.../MimeTest.kt` - pure function + unit test
+- `.../UpdateCheck.kt` - Auto update: `UpdateLogic` (pure: parseVersion, isNewer, pickApkUrl, shouldCheck) + `Updater` (GitHub Releases latest check, APK download, verify, installer) + `UpdateDialog` popup. `UpdateTest.kt` unit test
+- `scripts/release.sh` - GitHub Release banata hai (CI ki tested APK ko `Chaman-Downloader.apk` naam se attach)
 - `.github/workflows/build.yml` - unit tests, assembleDebug, `BUILD_INFO.txt` (sab versions)
 
 ## Rules
@@ -34,15 +36,33 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 - Keys/tokens/keystore kahin hardcode nahi, repo me nahi (sirf GitHub Secrets)
 - Website access restrictions aur content rights ka respect
 - Repo hamesha public
+- **Release rule:** tag sirf backup hai, tag se release nahi banti. Sirf wo version release (latest) banta hai jo device pe pass ho chuka. Test builds release me nahi jate (ya `--pre`). Updater sirf latest normal release dekhta hai.
 
 ## Status
+## v0.4.25-update (2026-11-19) - Auto Update Check (CODE LIKHA, device test pending)
+- Kya bana: app start par ek baar GitHub `releases/latest` check (6 ghante me ek baar, jab update na ho; update mile to har start par). Naya version ho to popup `Naya version vX` [Update] [Baad me]. Update dabane par download (progress) > APK verify (same package, same signing key, versionCode bada) > system installer. Pre-release/draft ignore. Net/GitHub fail ho to chupchap kuch nahi. Settings me koi naya card nahi.
+- Version compare: release tag (`v0.4.25`) vs app `versionName` ka number hissa (`0.4.25-update` > `0.4.25`). Suffix ignore. Release asset ka naam exact `Chaman-Downloader.apk`.
+- Popup nahi aata: welcome chal raha ho, ya Queue me download RUNNING ho (install se process mar jata hai). "Baad me" ke baad usi process me dobara nahi.
+- versionCode 30, versionName `0.4.25-update`.
+- Device test checklist: (a) app normal khule, koi popup nahi (latest release v0.4.24 abhi isse chhota hai), koi crash nahi. (b) airplane mode me app khule: koi error/popup nahi. (c) YouTube/Instagram download regression. (d) Popup wala raasta tab test hoga jab koi isse bada release bane (next version release karke, v0.4.25 wale phone pe app kholo: popup > Update > progress > install screen > app naya version). (e) Download chalte waqt popup na aaye.
+- Pehla release: **v0.4.24** (device pe pass wala version) `scripts/release.sh v0.4.24 "..."` se. Updater is release me nahi hai, wo sirf v0.4.25+ me hai.
+
+## Release set karne ka tarika (har baar yahi)
+1. Version device pe pass ho jaye. Tab `git tag v{X} -m "{details}" && git push origin v{X}` (backup).
+2. `app/build.gradle.kts` me `versionName` ka number tag ke number jaisa ho (tag v0.4.26 <-> versionName `0.4.26-...`), aur versionCode har build pe badhta hai.
+3. Release: `cd ~/test/chaman-downloader && scripts/release.sh v{X} "kya badla"`. Script: tag push hua ya nahi dekhti, us tag ke commit ki successful CI run dhundhti hai, wahi tested APK download karti hai, check karti hai ki permanent key se signed hai (debug key to roki jati hai), `Chaman-Downloader.apk` naam se Release (latest) banati hai.
+4. Test build ko dusron tak nahi bhejna ho to: `scripts/release.sh v{X} "notes" --pre` (pre-release, updater ignore karta hai) ya release hi mat banao.
+5. Galat release hataani ho: `gh release delete v{X} --yes` (tag rehta hai; tag bhi hatana ho: `git push origin :refs/tags/v{X} && git tag -d v{X}`). Latest ban jaye wo purana normal release jo sabse naya ho.
+6. Updater sirf `releases/latest` dekhta hai: sirf normal (non-pre) release me hi `Chaman-Downloader.apk` ho to popup aata hai.
+7. `scripts/release.sh` sandbox me test nahi hui (network nahi), pehli real run v0.4.24 pe hogi. Fail ho to message dekh kar fix karna.
+
 ## v0.4.24-parked (2026-11-18) - Instagram cookies PARKED (device pe pass, tag v0.4.24)
 - Step P (v0.4.21 welcome notification page + setup page) device pe PASS. v0.4.23-igios result: `ios check` HTTP 200 par message "Were sorry but something went wrong" (soft-block), story phir bhi fail. Story ke liye koi aur raasta chahiye, isliye abhi park (user decision).
 - `Flags.kt`: `Flags.INSTAGRAM_COOKIES = false`. Flag false me: (1) Welcome me setup page nahi (aakhri page = notification page, uspe tick -> app), (2) Settings me \"Instagram cookies\" card nahi, (3) `MainActivity` IMPORT_COOKIES handle + `CookieSetup.onResume/onPause` band, (4) `DownloadService` me \"cookies: ... lagayi\" log nahi, (5) Python: `set_instagram_cookies_enabled(False)` (Kotlin app start par bhejta hai) -> `_cookie_opts` {} , Instagram `_client_order` sirf default (ig:ios retry nahi), `_with_diag` seedha pass-through (error me `cookies:` line nahi). Reel/post public chalte hain (bina login).
 - Code delete nahi kiya (CookieStore, CookieSetup, Handshake.md, diag, `_IG_CLIENTS`). Wapas on: `Flags.INSTAGRAM_COOKIES = true`.
 - DEVICE PE PASS: checklist (a)-(e) sab pass (user ne confirm kiya, 2026-11-18). Rollback: `git checkout v0.4.24` (dekhne ke liye) ya `git reset --hard v0.4.24`.
 - Device test checklist (pass): (a) fresh install / Settings > Made by Najeef: 4 page (welcome, download, made by, notification), notification page pe tick -> Home, setup page nahi; (b) Settings me Instagram cookies card nahi; (c) Instagram reel/post link Search + Download chale; story link ab seedha plain yt-dlp error de (`cookies:` line nahi, expected); (d) YouTube + normal link regression; (e) purani imported cookies ho to bhi koi asar nahi.
-- Idea (ABHI NAHI BANANA): Auto Update Check page: GitHub Releases se hamesha check, update ho to bole. Production app aur test-stage versions alag rahenge; jis version ko production me push karenge sirf usi ka update aayega. Concept baad me confirm karke banana.
+- (v0.4.25-update me BAN GAYA) Auto Update Check: GitHub Releases se hamesha check, update ho to bole. Production app aur test-stage versions alag rahenge; jis version ko production me push karenge sirf usi ka update aayega. Concept baad me confirm karke banana.
 
 ## (purani status) v0.4.23-igios
 ## Abhi ki situation (Step O + P, v0.4.23-igios, 2026-11-18)
