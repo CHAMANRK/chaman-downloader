@@ -39,7 +39,7 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 - **Release rule:** tag sirf backup hai, tag se release nahi banti. Sirf wo version release (latest) banta hai jo device pe pass ho chuka. Test builds release me nahi jate (ya `--pre`). Updater sirf latest normal release dekhta hai.
 
 ## Status
-## v0.4.25-update (2026-11-19) - Auto Update Check (CODE LIKHA, device test pending)
+## v0.4.25-update (2026-11-19) - Auto Update Check (device pe pass: checklist a, b, c, e; tag v0.4.25). PENDING: popup > download > install wala raasta (d) tab test hoga jab v0.4.25 se bada release bane
 - Kya bana: app start par ek baar GitHub `releases/latest` check (6 ghante me ek baar, jab update na ho; update mile to har start par). Naya version ho to popup `Naya version vX` [Update] [Baad me]. Update dabane par download (progress) > APK verify (same package, same signing key, versionCode bada) > system installer. Pre-release/draft ignore. Net/GitHub fail ho to chupchap kuch nahi. Settings me koi naya card nahi.
 - Version compare: release tag (`v0.4.25`) vs app `versionName` ka number hissa (`0.4.25-update` > `0.4.25`). Suffix ignore. Release asset ka naam exact `Chaman-Downloader.apk`.
 - Popup nahi aata: welcome chal raha ho, ya Queue me download RUNNING ho (install se process mar jata hai). "Baad me" ke baad usi process me dobara nahi.
@@ -167,6 +167,6 @@ User decision (is session): Queue card (2) aur Queue multi-item (3) abhi chhod d
 
 ## Baaki kaam
 1. ~~Batch C~~, ~~Phase 1 base UI~~, ~~Step A~~, ~~logo + permanent key~~, ~~Step B~~, ~~Step D~~, ~~Step E~~, ~~Step F~~, ~~Step G (ring ke alawa)~~ - device pe pass
-2. Step P + v0.4.24-parked: device pe pass. Step J, K, L: device pe pass. Step M v0.4.16-smartexc (device pe pass; v0.4.14 FAIL tha, missing smart-exception-java helper, v0.4.16 me fix). Step N v0.4.18-savefolder (folder + Video/Audio sub-dirs): device pe pass. Step O v0.4.19-cookies: handshake + reel/post cookies + Clear + log device pe pass; story link FAIL unresolved. v0.4.20-cookiediag (diagnostic + Step P welcome setup page): CODE LIKHA, device test pending.
+2. Step Q v0.4.25-update (Auto Update Check): device pe pass (popup/install raasta pending, agle release pe). Step P + v0.4.24-parked: device pe pass. Step J, K, L: device pe pass. Step M v0.4.16-smartexc (device pe pass; v0.4.14 FAIL tha, missing smart-exception-java helper, v0.4.16 me fix). Step N v0.4.18-savefolder (folder + Video/Audio sub-dirs): device pe pass. Step O v0.4.19-cookies: handshake + reel/post cookies + Clear + log device pe pass; story link FAIL unresolved. v0.4.20-cookiediag (diagnostic + Step P welcome setup page): CODE LIKHA, device test pending.
 3. Chhode hue (user ne abhi nahi bola): Smart Paste chip, Queue card redesign, Queue multi-item, (Step C download folder select = pehle cancel, ab Step N me naye form me maanga), Phase 2+ (Room download manager), FFmpeg tools, Instagram/universal, optimization
 4. Known: YouTube fallback chain (tv/android_vr/web_embedded) unproven (bot-check dobara aaye to dekhna); mp3 Step M me bana, libmp3lame device pe verify hona baaki (Debug Test 5c); 1080p option kabhi Premium/m3u8 format chun sakta hai (abhi problem nahi aayi; aaye to https-only filter)
