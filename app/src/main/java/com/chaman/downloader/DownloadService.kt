@@ -37,63 +37,142 @@ class ProgressCb(private val onP: (Double, String, String, String) -> Unit) {
 class DownloadService : Service() {
 
     companion object {
-        const val EXTRA_URL = "url"
-        const val EXTRA_FORMAT = "format" // yt-dlp format string; khaali = best
-        const val EXTRA_TITLE = "title" // Retry ke liye (Queue me naam dikhane ko)
         const val ACTION_CANCEL = "com.chaman.downloader.CANCEL"
+        const val ACTION_PROCESS = "com.chaman.downloader.PROCESS" // queue chalao (DB me QUEUED items uthao)
+        const val EXTRA_RETRY_ID = "retry_id" // notification Retry: is item ko dobara line me daalo
         private const val CHANNEL = "downloads"
         private const val NOTIF_ID = 1
-        private const val DONE_ID = 2
-        private const val RC_RETRY = 3
-        private const val RC_OPEN = 4
-        private const val RC_SHARE = 5
+        private const val DONE_BASE = 1000 // har item ka apna Done/Fail notification: DONE_BASE + id
         private const val RC_APP = 6
 
         @Volatile
         var cancelRequested = false
+
+        private fun doneId(id: Long): Int = DONE_BASE + (id % 100000).toInt()
+        private fun rc(id: Long, k: Int): Int = 100 + (id % 100000).toInt() * 4 + k
     }
 
-    private var worker: Thread? = null
+    private val lock = Any()
+    private var workerRunning = false
+    private var wake = false
+    private var lastStartId = 0
+    private val retryIds = java.util.concurrent.ConcurrentLinkedQueue<Long>()
     private var wakeLock: PowerManager.WakeLock? = null
+
+    @Volatile
+    private var curNotif: Notification? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_CANCEL) {
             cancelRequested = true
-            if (worker?.isAlive != true) stopSelf()
+            synchronized(lock) {
+                lastStartId = startId
+                if (!workerRunning) stopSelf(startId)
+            }
             return START_NOT_STICKY
         }
 
         ensureChannel()
-        startForeground(
-            NOTIF_ID,
-            buildNotif("Link check ho raha hai", "", -1),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-        )
+        val rid = intent?.getLongExtra(EXTRA_RETRY_ID, -1L) ?: -1L
+        if (rid > 0) retryIds.add(rid)
 
-        val url = intent?.getStringExtra(EXTRA_URL)
-        val fmt = intent?.getStringExtra(EXTRA_FORMAT) ?: ""
-        val title = intent?.getStringExtra(EXTRA_TITLE) ?: ""
-        if (url.isNullOrBlank()) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
-            return START_NOT_STICKY
+        synchronized(lock) {
+            lastStartId = startId
+            // startForegroundService ke baad 5 sec me startForeground zaroori hai (worker chal raha ho tab bhi)
+            startForeground(
+                NOTIF_ID,
+                curNotif ?: buildNotif("Link check ho raha hai", "", -1),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+            if (workerRunning) {
+                wake = true
+            } else {
+                workerRunning = true
+                wake = false
+                val pm = getSystemService(PowerManager::class.java)
+                val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "chaman:download").apply {
+                    setReferenceCounted(false)
+                    acquire(3 * 60 * 60 * 1000L)
+                }
+                wakeLock = wl
+                Thread { workerMain(wl) }.start()
+            }
         }
-        if (worker?.isAlive == true) return START_NOT_STICKY
+        return START_NOT_STICKY
+    }
 
-        val pm = getSystemService(PowerManager::class.java)
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "chaman:download").apply {
-            acquire(3 * 60 * 60 * 1000L)
+    override fun onDestroy() {
+        wakeLock?.let { if (it.isHeld) it.release() }
+        super.onDestroy()
+    }
+
+    /** Foreground notification badlo (aur yaad rakho, taaki dobara startForeground me wahi jaye). */
+    private fun fg(head: String, text: String, pct: Int) {
+        val n = buildNotif(head, text, pct)
+        curNotif = n
+        getSystemService(NotificationManager::class.java).notify(NOTIF_ID, n)
+    }
+
+    /** Serial queue: ek-ek karke QUEUED item chalata hai, khatam hone par service band. */
+    private fun workerMain(wl: PowerManager.WakeLock) {
+        val dao = AppDb.get(this).dao()
+        try {
+            while (true) {
+                while (true) {
+                    val r = retryIds.poll() ?: break
+                    dao.requeue(r, System.currentTimeMillis())
+                }
+                cancelRequested = false
+                val item = dao.nextQueued()
+                if (item == null) {
+                    var exit = false
+                    synchronized(lock) {
+                        if (wake || retryIds.isNotEmpty()) {
+                            wake = false
+                        } else {
+                            workerRunning = false
+                            curNotif = null
+                            stopForeground(STOP_FOREGROUND_REMOVE)
+                            stopSelf(lastStartId)
+                            exit = true
+                        }
+                    }
+                    if (exit) return
+                    continue
+                }
+                if (dao.claim(item.id) == 0) continue // beech me cancel/hata diya gaya
+                runItem(item, dao, wl)
+            }
+        } catch (t: Throwable) {
+            DownloadState.logLine("Queue worker error: ${t::class.java.simpleName}: ${t.message}")
+            synchronized(lock) {
+                workerRunning = false
+                curNotif = null
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf(lastStartId)
+            }
+        } finally {
+            if (wl.isHeld) wl.release() // sirf apna wake lock (naya worker apna alag banata hai)
         }
+    }
 
-        cancelRequested = false
+    /** Ek item ka poora download (pehle ka logic, bas ab DB row ke saath). */
+    private fun runItem(item: DlItem, dao: DlDao, wl: PowerManager.WakeLock) {
+        val url = item.url
+        val fmt = item.fmt
+        val title = item.title.ifBlank { item.url }
+        wl.acquire(3 * 60 * 60 * 1000L) // har item pe timeout dobara 3 ghante
+
         DownloadState.reset()
+        DownloadState.currentId = item.id
         DownloadState.sourceUrl = url
         DownloadState.sourceFmt = fmt
-        if (title.isNotBlank()) DownloadState.currentTitle = title
+        DownloadState.currentTitle = title
         val nm = getSystemService(NotificationManager::class.java)
-        nm.cancel(DONE_ID) // purana Done/Fail/Cancel notification hatao
+        nm.cancel(doneId(item.id)) // is item ka purana Done/Fail notification hatao
+        fg("Link check ho raha hai", "", -1)
 
         var lastNotif = 0L
         var lastHeartbeat = System.currentTimeMillis()
@@ -104,7 +183,7 @@ class DownloadService : Service() {
             val now = System.currentTimeMillis()
             if (now - lastNotif > 1000) {
                 lastNotif = now
-                nm.notify(NOTIF_ID, buildNotif(ntitle, nbody.ifBlank { DownloadState.currentTitle }, pct.toInt()))
+                fg(ntitle, nbody.ifBlank { DownloadState.currentTitle }, pct.toInt())
             }
             while (pct >= nextMark && nextMark <= 100) {
                 DownloadState.logLine("$nextMark%  $text")
@@ -121,76 +200,77 @@ class DownloadService : Service() {
             if (CookieStore.has(this, site)) DownloadState.logLine("cookies: $site import ki hui lagayi")
         }
 
-        worker = Thread {
-            val outDir = File(filesDir, "dl").apply { mkdirs() }
-            try {
-                val json = JSONObject(
-                    Python.getInstance().getModule("tests")
-                        .callAttr("download", url, outDir.absolutePath, cb, fmt).toString()
-                )
-                DownloadState.logLine("formats: ${json.getString("desc")}")
-                val parts = json.getJSONArray("files")
-                val src: File
-                if (parts.length() == 2) {
-                    val v = File(parts.getString(0))
-                    val a = File(parts.getString(1))
-                    DownloadState.logLine("download done: video ${v.length()} B, audio ${a.length()} B. FFmpeg merge...")
-                    DownloadState.line = "Merging video + audio..."
-                    nm.notify(NOTIF_ID, buildNotif("Video aur audio jod rahe hain", DownloadState.currentTitle, -1))
-                    src = File(outDir, json.getString("id") + "." + json.getString("merge_ext"))
-                    FfmpegProbe.merge(v, a, src)
-                    v.delete()
-                    a.delete()
-                } else if (json.optBoolean("to_mp3", false)) {
-                    val a = File(parts.getString(0))
-                    DownloadState.logLine("download done: audio ${a.length()} B. mp3 convert...")
-                    DownloadState.line = "MP3 bana rahe hain..."
-                    nm.notify(NOTIF_ID, buildNotif("MP3 bana rahe hain", DownloadState.currentTitle, -1))
-                    src = File(outDir, json.getString("id") + ".mp3")
-                    FfmpegProbe.toMp3(a, src)
-                    a.delete()
-                    fun js(k: String) = if (json.isNull(k)) "" else json.optString(k, "")
-                    DownloadState.logLine(Cover.tagMp3(src, js("title"), js("uploader"), js("thumbnail")))
-                } else {
-                    src = File(parts.getString(0))
-                }
-                val displayName = safeFileName(json.optString("title", ""), json.getString("id")) +
-                    "." + src.extension
-                DownloadState.logLine("ready: $displayName (${src.length()} bytes), MediaStore me save")
-                nm.notify(NOTIF_ID, buildNotif("File save ho rahi hai", displayName, -1))
-                val dest = saveFile(src, displayName, json.optBoolean("has_video", true))
-                val secs = (System.currentTimeMillis() - DownloadState.startedAt) / 1000
-                DownloadState.logLine("PASS in ${secs}s -> $dest/$displayName")
-                DownloadState.progress = 1f
-                DownloadState.status = DlStatus.PASS
-                notifyPass(displayName)
-            } catch (t: Throwable) {
-                outDir.listFiles()?.forEach { it.delete() }
-                if (cancelRequested) {
-                    DownloadState.logLine("CANCELLED by user")
-                    DownloadState.status = DlStatus.CANCELLED
-                    notifyStopped("Download rok diya", DownloadState.currentTitle, url, fmt, title)
-                } else {
-                    val msg = if (t is PyException) "PyException: ${t.message}"
-                    else "${t::class.java.simpleName}: ${t.message}"
-                    DownloadState.logLine("FAIL  $msg")
-                    DownloadState.error = queueErrorText(msg)
-                    DownloadState.status = DlStatus.FAIL
-                    notifyStopped("Download fail ho gaya", notifFailBody(msg), url, fmt, title)
-                }
-            } finally {
-                wakeLock?.let { if (it.isHeld) it.release() }
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
+        val outDir = File(filesDir, "dl").apply { mkdirs() }
+        try {
+            val json = JSONObject(
+                Python.getInstance().getModule("tests")
+                    .callAttr("download", url, outDir.absolutePath, cb, fmt).toString()
+            )
+            DownloadState.logLine("formats: ${json.getString("desc")}")
+            val parts = json.getJSONArray("files")
+            val src: File
+            if (parts.length() == 2) {
+                val v = File(parts.getString(0))
+                val a = File(parts.getString(1))
+                DownloadState.logLine("download done: video ${v.length()} B, audio ${a.length()} B. FFmpeg merge...")
+                DownloadState.line = "Merging video + audio..."
+                fg("Video aur audio jod rahe hain", DownloadState.currentTitle, -1)
+                src = File(outDir, json.getString("id") + "." + json.getString("merge_ext"))
+                FfmpegProbe.merge(v, a, src)
+                v.delete()
+                a.delete()
+            } else if (json.optBoolean("to_mp3", false)) {
+                val a = File(parts.getString(0))
+                DownloadState.logLine("download done: audio ${a.length()} B. mp3 convert...")
+                DownloadState.line = "MP3 bana rahe hain..."
+                fg("MP3 bana rahe hain", DownloadState.currentTitle, -1)
+                src = File(outDir, json.getString("id") + ".mp3")
+                FfmpegProbe.toMp3(a, src)
+                a.delete()
+                fun js(k: String) = if (json.isNull(k)) "" else json.optString(k, "")
+                DownloadState.logLine(Cover.tagMp3(src, js("title"), js("uploader"), js("thumbnail")))
+            } else {
+                src = File(parts.getString(0))
             }
-        }.also { it.start() }
-
-        return START_NOT_STICKY
-    }
-
-    override fun onDestroy() {
-        wakeLock?.let { if (it.isHeld) it.release() }
-        super.onDestroy()
+            val vidTitle = json.optString("title", "")
+            if (vidTitle.isNotBlank() && vidTitle != "null" && (item.title.isBlank() || item.title == item.url)) {
+                dao.setTitle(item.id, vidTitle) // Debug / "seedha download" me naam khali tha
+            }
+            val displayName = safeFileName(vidTitle, json.getString("id")) + "." + src.extension
+            DownloadState.logLine("ready: $displayName (${src.length()} bytes), MediaStore me save")
+            fg("File save ho rahi hai", displayName, -1)
+            val dest = saveFile(src, displayName, json.optBoolean("has_video", true))
+            val secs = (System.currentTimeMillis() - DownloadState.startedAt) / 1000
+            DownloadState.logLine("PASS in ${secs}s -> $dest/$displayName")
+            DownloadState.progress = 1f
+            val savedUri = DownloadState.savedUri
+            val savedMime = DownloadState.savedMime
+            dao.finish(item.id, QStatus.PASS.name, 1f, "", savedUri ?: "", savedMime)
+            DownloadState.status = DlStatus.PASS
+            // UI ke liye PASS ki khabar (agla item turant reset karega, isliye alag fields)
+            DownloadState.passUrl = url
+            DownloadState.passUri = savedUri
+            DownloadState.passMime = savedMime
+            DownloadState.passCount += 1
+            notifyPass(item.id, displayName)
+        } catch (t: Throwable) {
+            outDir.listFiles()?.forEach { it.delete() }
+            if (cancelRequested) {
+                DownloadState.logLine("CANCELLED by user")
+                runCatching { dao.finish(item.id, QStatus.CANCELLED.name, 0f, "", "", "") }
+                DownloadState.status = DlStatus.CANCELLED
+                notifyStopped(item.id, "Download rok diya", DownloadState.currentTitle)
+            } else {
+                val msg = if (t is PyException) "PyException: ${t.message}"
+                else "${t::class.java.simpleName}: ${t.message}"
+                DownloadState.logLine("FAIL  $msg")
+                val err = queueErrorText(msg)
+                DownloadState.error = err
+                runCatching { dao.finish(item.id, QStatus.FAIL.name, 0f, err, "", "") }
+                DownloadState.status = DlStatus.FAIL
+                notifyStopped(item.id, "Download fail ho gaya", notifFailBody(msg))
+            }
+        }
     }
 
     /** Chune Save folder me (Video/ ya Audio/); na chuna ho ya na mile to default Download/Chaman/<Video|Audio>. Dest label deta hai. */
@@ -289,7 +369,7 @@ class DownloadService : Service() {
     private fun action(icon: Int, label: String, pi: PendingIntent): Notification.Action =
         Notification.Action.Builder(Icon.createWithResource(this, icon), label, pi).build()
 
-    private fun postResult(head: String, text: String, actions: List<Notification.Action>) {
+    private fun postResult(id: Long, head: String, text: String, actions: List<Notification.Action>) {
         val b = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle(head)
@@ -298,11 +378,11 @@ class DownloadService : Service() {
             .setContentIntent(appPi())
             .setAutoCancel(true)
         actions.forEach { b.addAction(it) }
-        getSystemService(NotificationManager::class.java).notify(DONE_ID, b.build())
+        getSystemService(NotificationManager::class.java).notify(doneId(id), b.build())
     }
 
     /** Download ho gaya: [Open] [Share]. */
-    private fun notifyPass(displayName: String) {
+    private fun notifyPass(id: Long, displayName: String) {
         val uri = DownloadState.savedUri?.let { Uri.parse(it) }
         val acts = ArrayList<Notification.Action>()
         if (uri != null) {
@@ -320,23 +400,22 @@ class DownloadService : Service() {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             val fl = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             acts += action(android.R.drawable.ic_menu_view, "Open",
-                PendingIntent.getActivity(this, RC_OPEN, view, fl))
+                PendingIntent.getActivity(this, rc(id, 1), view, fl))
             acts += action(android.R.drawable.ic_menu_share, "Share",
-                PendingIntent.getActivity(this, RC_SHARE, chooser, fl))
+                PendingIntent.getActivity(this, rc(id, 2), chooser, fl))
         }
-        postResult("Download ho gaya", displayName, acts)
+        postResult(id, "Download ho gaya", displayName, acts)
     }
 
-    /** Fail ya cancel: [Retry] (wahi link, wahi quality). */
-    private fun notifyStopped(head: String, text: String, url: String, fmt: String, title: String) {
+    /** Fail ya cancel: [Retry] (isi item ko dobara line ke aakhir me daalta hai, wahi link + quality). */
+    private fun notifyStopped(id: Long, head: String, text: String) {
         val i = Intent(this, DownloadService::class.java)
-            .putExtra(EXTRA_URL, url)
-            .putExtra(EXTRA_FORMAT, fmt)
-            .putExtra(EXTRA_TITLE, title)
+            .setAction(ACTION_PROCESS)
+            .putExtra(EXTRA_RETRY_ID, id)
         val pi = PendingIntent.getForegroundService(
-            this, RC_RETRY, i,
+            this, rc(id, 0), i,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        postResult(head, text, listOf(action(android.R.drawable.ic_menu_rotate, "Retry", pi)))
+        postResult(id, head, text, listOf(action(android.R.drawable.ic_menu_rotate, "Retry", pi)))
     }
 }

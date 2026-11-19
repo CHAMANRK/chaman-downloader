@@ -192,10 +192,7 @@ fun TestScreen() {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
-                            ctx.startForegroundService(
-                                Intent(ctx, DownloadService::class.java)
-                                    .putExtra(DownloadService.EXTRA_URL, dlUrl.trim())
-                            )
+                            QueueRepo.enqueueAndStart(ctx, dlUrl.trim(), "", "", "")
                         },
                         enabled = DownloadState.status != DlStatus.RUNNING
                     ) { Text("Start") }

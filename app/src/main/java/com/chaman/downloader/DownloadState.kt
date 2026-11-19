@@ -23,6 +23,15 @@ object DownloadState {
     var savedMime by mutableStateOf("*/*")
     @Volatile var startedAt: Long = 0L
 
+    // Queue (Step U): abhi jo item chal raha (ya aakhri chala) uski DB id
+    var currentId by mutableStateOf(-1L)
+
+    // PASS ki khabar: serial queue me agla item turant shuru ho jata hai (reset), isliye PASS ki cheezein alag rakhi hain
+    var passCount by mutableStateOf(0)
+    @Volatile var passUrl: String = ""
+    @Volatile var passUri: String? = null
+    @Volatile var passMime: String = "*/*"
+
     private val fmt = SimpleDateFormat("HH:mm:ss", Locale.US)
 
     fun reset() {

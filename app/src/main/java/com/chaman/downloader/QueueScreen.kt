@@ -1,10 +1,8 @@
 package com.chaman.downloader
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,12 +16,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -31,10 +31,13 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun QueueScreen(onOpenLibrary: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    var showLog by remember { mutableStateOf(false) }
-    val st = DownloadState.status
     val ctx = LocalContext.current
+    val dao = remember { AppDb.get(ctx).dao() }
+    val flow = remember(dao) { dao.observeAll() }
+    val items by flow.collectAsState(initial = emptyList())
+    val sorted = remember(items) { sortForDisplay(items) }
+    var logOpenId by remember { mutableStateOf(-1L) }
+    val hasDone = items.any { QStatus.parse(it.status) == QStatus.PASS }
 
     Column(
         modifier = Modifier
@@ -47,102 +50,128 @@ fun QueueScreen(onOpenLibrary: () -> Unit) {
     ) {
         PageTitle("Queue")
 
-        if (st == DlStatus.IDLE) {
+        if (items.isEmpty()) {
             EmptyState(iconIndex = 1, title = "Queue khali")
         } else {
-            LuxCard {
-                Text(
-                    DownloadState.currentTitle.ifBlank { "Download" },
-                    style = MaterialTheme.typography.headlineSmall,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
-                )
-                val label = when (st) {
-                    DlStatus.RUNNING -> "Download ho raha hai"
-                    DlStatus.PASS -> "Complete"
-                    DlStatus.FAIL -> "Fail ho gaya"
-                    DlStatus.CANCELLED -> "Cancel kiya"
-                    else -> ""
-                }
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (st == DlStatus.FAIL) cs.error else cs.primary
-                )
-
-                if (st == DlStatus.FAIL && DownloadState.error.isNotBlank()) {
-                    Text(
-                        DownloadState.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = cs.onSurfaceVariant
-                    )
-                }
-
-                if (st == DlStatus.RUNNING) {
-                    val barMod = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                    if (DownloadState.progress >= 0f) {
-                        LinearProgressIndicator(
-                            progress = { DownloadState.progress },
-                            modifier = barMod,
-                            color = cs.primary,
-                            trackColor = cs.surfaceVariant
-                        )
-                        Text(
-                            "${(DownloadState.progress * 100).toInt()}%",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    } else {
-                        LinearProgressIndicator(
-                            modifier = barMod,
-                            color = cs.primary,
-                            trackColor = cs.surfaceVariant
-                        )
-                    }
-                    Text(
-                        DownloadState.line,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                        color = cs.onSurfaceVariant
-                    )
-                    QuietButton("Cancel", onClick = { DownloadService.cancelRequested = true })
-                }
-
-                if (st == DlStatus.PASS) {
-                    GoldButton("Library me dekho", onClick = onOpenLibrary)
-                }
-
-                // FAIL / Cancel: Retry (wahi link + wahi quality) ya Quality badlo (link Home me, search, nayi quality chuno)
-                if ((st == DlStatus.FAIL || st == DlStatus.CANCELLED) && DownloadState.sourceUrl.isNotBlank()) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        GoldButton("Retry", onClick = {
-                            ctx.startForegroundService(
-                                Intent(ctx, DownloadService::class.java)
-                                    .putExtra(DownloadService.EXTRA_URL, DownloadState.sourceUrl)
-                                    .putExtra(DownloadService.EXTRA_FORMAT, DownloadState.sourceFmt)
-                                    .putExtra(DownloadService.EXTRA_TITLE, DownloadState.currentTitle)
-                            )
-                        }, modifier = Modifier.weight(1f))
-                        QuietButton("Quality badlo", onClick = {
-                            ShareInbox.pending = DownloadState.sourceUrl
-                        }, modifier = Modifier.weight(1f), height = 54.dp)
+            if (hasDone) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { QueueRepo.clearCompleted(ctx) }) {
+                        Text("Completed hatao", color = MaterialTheme.colorScheme.primary)
                     }
                 }
-
-                TextButton(onClick = { showLog = !showLog }) {
-                    Text(if (showLog) "Log chhupao" else "Log dikhao", color = cs.primary)
-                }
-                if (showLog) {
-                    Text(
-                        DownloadState.log,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                        color = cs.onSurfaceVariant
-                    )
-                }
+            }
+            sorted.forEach { item ->
+                QueueItemCard(
+                    item = item,
+                    position = queuePosition(items, item.id),
+                    logOpen = logOpenId == item.id,
+                    onToggleLog = { logOpenId = if (logOpenId == item.id) -1L else item.id },
+                    onOpenLibrary = onOpenLibrary
+                )
             }
         }
     }
+}
+
+@Composable
+private fun QueueItemCard(
+    item: DlItem,
+    position: Int,
+    logOpen: Boolean,
+    onToggleLog: () -> Unit,
+    onOpenLibrary: () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    val ctx = LocalContext.current
+    val st = QStatus.parse(item.status)
+    val isCurrent = DownloadState.currentId == item.id
+
+    LuxCard {
+        Text(
+            item.title.ifBlank { item.url },
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            queueStatusLabel(st, position),
+            style = MaterialTheme.typography.labelLarge,
+            color = if (st == QStatus.FAIL) cs.error else cs.primary
+        )
+
+        if (st == QStatus.FAIL && item.error.isNotBlank()) {
+            Text(item.error, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+        }
+
+        if (st == QStatus.RUNNING) {
+            val progress = if (isCurrent) DownloadState.progress else item.progress
+            val barMod = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+            if (progress >= 0f) {
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = barMod,
+                    color = cs.primary,
+                    trackColor = cs.surfaceVariant
+                )
+                Text("${(progress * 100).toInt()}%", style = MaterialTheme.typography.titleMedium)
+            } else {
+                LinearProgressIndicator(modifier = barMod, color = cs.primary, trackColor = cs.surfaceVariant)
+            }
+            if (isCurrent) {
+                Text(
+                    DownloadState.line,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = cs.onSurfaceVariant
+                )
+            }
+        }
+
+        when (st) {
+            QStatus.RUNNING -> QuietButton("Cancel", onClick = { QueueRepo.cancel(ctx, item.id) })
+            QStatus.QUEUED -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                QuietButton("Cancel", onClick = { QueueRepo.cancel(ctx, item.id) }, modifier = Modifier.weight(1f), height = 54.dp)
+                QuietButton("Quality badlo", onClick = { changeQuality(item) }, modifier = Modifier.weight(1f), height = 54.dp)
+            }
+            QStatus.FAIL, QStatus.CANCELLED -> {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GoldButton("Retry", onClick = { QueueRepo.retry(ctx, item.id) }, modifier = Modifier.weight(1f))
+                    QuietButton("Quality badlo", onClick = { changeQuality(item) }, modifier = Modifier.weight(1f), height = 54.dp)
+                }
+                TextButton(onClick = { QueueRepo.remove(ctx, item.id) }) {
+                    Text("Hatao", color = cs.onSurfaceVariant)
+                }
+            }
+            QStatus.PASS -> {
+                GoldButton("Library me dekho", onClick = onOpenLibrary)
+                TextButton(onClick = { QueueRepo.remove(ctx, item.id) }) {
+                    Text("Hatao", color = cs.onSurfaceVariant)
+                }
+            }
+        }
+
+        // Log sirf us item ka jo abhi chal raha ya aakhri chala (memory me rehta hai)
+        if (isCurrent) {
+            TextButton(onClick = onToggleLog) {
+                Text(if (logOpen) "Log chhupao" else "Log dikhao", color = cs.primary)
+            }
+            if (logOpen) {
+                Text(
+                    DownloadState.log,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = cs.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/** Link Home me bharo + search; nayi quality ka download banne par ye purana item hat jata hai. */
+private fun changeQuality(item: DlItem) {
+    QueueRepo.replace = item.id to item.url
+    ShareInbox.pending = item.url
 }

@@ -210,43 +210,37 @@ private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug:
     // Download complete: haptic + chhota "Saved" snackbar (Open action)
     val snackbar = remember { SnackbarHostState() }
     val haptic = LocalHapticFeedback.current
-    val dlStatus = DownloadState.status
-    var prevStatus by remember { mutableStateOf(dlStatus) }
-    LaunchedEffect(dlStatus) {
-        val was = prevStatus
-        prevStatus = dlStatus
-        if (was == DlStatus.RUNNING && dlStatus == DlStatus.PASS) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            val canOpen = DownloadState.savedUri != null
-            // "Saved" + Open aane ke baad link field aur result clear (sirf jab field me wahi link ho jo download hua)
-            val doneUrl = DownloadState.sourceUrl
-            scope.launch {
-                delay(400)
-                if (doneUrl.isNotBlank() && url.trim() == doneUrl) {
-                    url = ""
-                    info = InfoState.None
-                }
-            }
-            val r = snackbar.showSnackbar(
-                message = "Saved",
-                actionLabel = if (canOpen) "Open" else null,
-                duration = SnackbarDuration.Long
-            )
-            if (r == SnackbarResult.ActionPerformed) {
-                val u = DownloadState.savedUri
-                if (u != null) openMediaUri(ctx, android.net.Uri.parse(u), DownloadState.savedMime)
+    // Serial queue me agla item turant shuru hota hai, isliye PASS ki khabar passCount se aati hai
+    val passCount = DownloadState.passCount
+    var prevPass by remember { mutableStateOf(passCount) }
+    LaunchedEffect(passCount) {
+        if (passCount <= prevPass) {
+            prevPass = passCount
+            return@LaunchedEffect
+        }
+        prevPass = passCount
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        val passUri = DownloadState.passUri
+        val passMime = DownloadState.passMime
+        val canOpen = passUri != null
+        // "Saved" aane ke baad link field aur result clear (sirf jab field me wahi link ho jo download hua)
+        val doneUrl = DownloadState.passUrl
+        scope.launch {
+            delay(400)
+            if (doneUrl.isNotBlank() && url.trim() == doneUrl) {
+                url = ""
+                info = InfoState.None
             }
         }
-    }
-
-    // Queue tab se hatne par sirf Completed card hatao (RUNNING / FAIL / CANCELLED rehte hain)
-    var prevPage by remember { mutableStateOf(pagerState.currentPage) }
-    LaunchedEffect(pagerState.currentPage) {
-        val p = pagerState.currentPage
-        if (prevPage == 1 && p != 1 && DownloadState.status == DlStatus.PASS) {
-            DownloadState.status = DlStatus.IDLE
+        snackbar.currentSnackbarData?.dismiss()
+        val r = snackbar.showSnackbar(
+            message = "Saved",
+            actionLabel = if (canOpen) "Open" else null,
+            duration = SnackbarDuration.Long
+        )
+        if (r == SnackbarResult.ActionPerformed && passUri != null) {
+            openMediaUri(ctx, android.net.Uri.parse(passUri), passMime)
         }
-        prevPage = p
     }
 
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -295,7 +289,15 @@ private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug:
                         onUrl = { url = it },
                         info = info,
                         onInfo = { info = it },
-                        onDownloadStarted = { goTo(1) }
+                        onQueued = { n ->
+                            scope.launch {
+                                snackbar.currentSnackbarData?.dismiss()
+                                snackbar.showSnackbar(
+                                    message = "Queue me jud gaya #$n",
+                                    duration = SnackbarDuration.Short
+                                )
+                            }
+                        }
                     )
                     1 -> QueueScreen(onOpenLibrary = { goTo(2) })
                     2 -> LibraryScreen(active = pagerState.currentPage == 2)

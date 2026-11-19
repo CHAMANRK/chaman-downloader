@@ -520,7 +520,7 @@ fun LibraryScreen(active: Boolean) {
     var loaded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var reloadTick by remember { mutableStateOf(0) }
-    val st = DownloadState.status
+    val st = DownloadState.passCount // har download PASS par Library dobara load
     val dateFmt = remember { SimpleDateFormat("d MMM yyyy", Locale.getDefault()) }
     val focusManager = LocalFocusManager.current
     var query by rememberSaveable { mutableStateOf("") }

@@ -166,12 +166,11 @@ fun HomeScreen(
     onUrl: (String) -> Unit,
     info: InfoState,
     onInfo: (InfoState) -> Unit,
-    onDownloadStarted: () -> Unit
+    onQueued: (Int) -> Unit
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val cs = MaterialTheme.colorScheme
-    val busy = DownloadState.status == DlStatus.RUNNING
     val hasUrl = url.isNotBlank()
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -193,16 +192,9 @@ fun HomeScreen(
         }
     }
 
-    fun start(title: String, fmt: String) {
-        DownloadState.currentTitle = title
-        DownloadState.sourceUrl = url.trim()
-        ctx.startForegroundService(
-            Intent(ctx, DownloadService::class.java)
-                .putExtra(DownloadService.EXTRA_URL, url.trim())
-                .putExtra(DownloadService.EXTRA_FORMAT, fmt)
-                .putExtra(DownloadService.EXTRA_TITLE, title)
-        )
-        onDownloadStarted()
+    /** Download ko queue me daalo (Home pe hi raho); line me number onQueued se snackbar me aata hai. */
+    fun start(title: String, fmt: String, thumb: String = "") {
+        QueueRepo.enqueueAndStart(ctx, url.trim(), fmt, title, thumb, onQueued)
     }
 
     // Result ki selection state: har naye search (naya InfoState.Ok) pe reset
@@ -294,7 +286,7 @@ fun HomeScreen(
                 is InfoState.Err -> LuxCard {
                     Text("Search nahi ho paya", style = MaterialTheme.typography.titleMedium, color = cs.error)
                     Text(info.msg, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 8, overflow = TextOverflow.Ellipsis)
-                    QuietButton("Seedha best quality me download", onClick = { start(url.trim(), "") }, enabled = !busy)
+                    QuietButton("Seedha best quality me download", onClick = { start(url.trim(), "") })
                 }
                 is InfoState.Ok -> {
                     ResultHeader(info.data)
@@ -311,13 +303,6 @@ fun HomeScreen(
                 else -> {}
             }
 
-            if (busy) {
-                Text(
-                    "Ek download chal raha hai",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = cs.onSurfaceVariant
-                )
-            }
         }
 
         // Sticky Download bar (floating nav ke upar)
@@ -340,12 +325,11 @@ fun HomeScreen(
                 shadowElevation = 10.dp
             ) {
                 GoldButton(
-                    text = if (busy) "Download chal raha hai" else "Download \u00b7 ${opt.label}$sizeText",
-                    onClick = { start("${okData.title} (${opt.label})", opt.fmt) },
+                    text = "Download \u00b7 ${opt.label}$sizeText",
+                    onClick = { start("${okData.title} (${opt.label})", opt.fmt, okData.thumb) },
                     modifier = Modifier
                         .padding(6.dp)
-                        .fillMaxWidth(),
-                    enabled = !busy
+                        .fillMaxWidth()
                 )
             }
         }

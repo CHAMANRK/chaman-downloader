@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.chaquo.python")
+    id("com.google.devtools.ksp")
 }
 
 val ytdlpVersion: String = providers.gradleProperty("ytdlpVersion").get()
@@ -15,8 +16,8 @@ android {
         applicationId = "com.chaman.downloader"
         minSdk = 29 // MediaStore.Downloads (scoped storage) ke liye Android 10+
         targetSdk = 34
-        versionCode = 35
-        versionName = "0.4.29-speed"
+        versionCode = 36
+        versionName = "0.4.30-queue"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -76,6 +77,11 @@ dependencies {
     implementation("dev.ffmpegkit-maintained:ffmpeg-kit-audio:$ffmpegkitVersion")
     // ffmpeg-kit-audio ka POM ye helper saath nahi laata (v0.4.15 device: NoClassDefFoundError com.arthenica.smartexception.java.Exceptions)
     implementation("com.arthenica:smart-exception-java:0.2.1")
+
+    // Queue Room (Step U). Versions meri yaad se, web se verify nahi: CI resolve hona hi asli check.
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
 
     testImplementation("junit:junit:4.13.2")
 }
