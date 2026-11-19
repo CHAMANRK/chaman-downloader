@@ -254,11 +254,37 @@ private fun loadDurationMs(ctx: Context, f: LibItem): Long {
     return ms
 }
 
-/** Pehle system thumbnail, na mile to video ka first frame. Audio files ke liye null. */
+/** Video: pehle system thumbnail, na mile to first frame. Audio: embedded cover (na ho to null). */
 private fun loadThumb(ctx: Context, f: LibItem): Bitmap? {
     thumbCache.get(f.id)?.let { return it }
-    if (f.mime.startsWith("audio")) return null
     val uri = f.uri
+    if (f.mime.startsWith("audio")) {
+        // Audio: file ke andar lagi cover (ID3 APIC) dikhao; na ho to null (placeholder)
+        val r = MediaMetadataRetriever()
+        var cover: Bitmap? = null
+        try {
+            r.setDataSource(ctx, uri)
+            val pic = r.embeddedPicture
+            if (pic != null) {
+                val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeByteArray(pic, 0, pic.size, o)
+                var ss = 1
+                while (o.outWidth / (ss * 2) >= 320 && o.outHeight / (ss * 2) >= 320) ss *= 2
+                cover = android.graphics.BitmapFactory.decodeByteArray(
+                    pic, 0, pic.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = ss }
+                )
+            }
+        } catch (t: Throwable) {
+            cover = null
+        } finally {
+            try {
+                r.release()
+            } catch (t: Throwable) {
+            }
+        }
+        if (cover != null) thumbCache.put(f.id, cover)
+        return cover
+    }
     var bmp: Bitmap? = try {
         ctx.contentResolver.loadThumbnail(uri, Size(320, 180), null)
     } catch (t: Throwable) {
