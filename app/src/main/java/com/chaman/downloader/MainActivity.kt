@@ -91,7 +91,10 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
         }
         handleShare(intent)
-        if (savedInstanceState == null) handleCookies(intent)
+        if (savedInstanceState == null) {
+            handleCookies(intent)
+            QueueRepo.resumeQueued(this) // pichli baar ke QUEUED items khud shuru
+        }
         setContent { ChamanApp(this) }
     }
 

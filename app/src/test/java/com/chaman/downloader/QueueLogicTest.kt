@@ -61,4 +61,11 @@ class QueueLogicTest {
         assertEquals("Cancel kiya", queueStatusLabel(QStatus.CANCELLED, 0))
         assertEquals("Download ho raha hai", queueStatusLabel(QStatus.RUNNING, 1))
     }
+
+    @Test
+    fun moreInQueueLine() {
+        assertEquals("", moreInQueueText(0))
+        assertEquals("1 aur queue me", moreInQueueText(1))
+        assertEquals("4 aur queue me", moreInQueueText(4))
+    }
 }

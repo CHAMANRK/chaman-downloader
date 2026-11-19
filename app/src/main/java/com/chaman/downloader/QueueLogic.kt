@@ -47,3 +47,6 @@ fun queueStatusLabel(s: QStatus, position: Int): String = when (s) {
     QStatus.FAIL -> "Fail ho gaya"
     QStatus.CANCELLED -> "Cancel kiya"
 }
+
+/** Notification ki chhoti line: chalte item ke baad kitne queue me hain. Koi nahi to khali. */
+fun moreInQueueText(n: Int): String = if (n > 0) "$n aur queue me" else ""

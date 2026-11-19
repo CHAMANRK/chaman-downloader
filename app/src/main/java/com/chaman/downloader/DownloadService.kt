@@ -110,7 +110,12 @@ class DownloadService : Service() {
 
     /** Foreground notification badlo (aur yaad rakho, taaki dobara startForeground me wahi jaye). */
     private fun fg(head: String, text: String, pct: Int) {
-        val n = buildNotif(head, text, pct)
+        val more = try {
+            AppDb.get(this).dao().queuedCount()
+        } catch (t: Throwable) {
+            0
+        }
+        val n = buildNotif(head, text, pct, moreInQueueText(more))
         curNotif = n
         getSystemService(NotificationManager::class.java).notify(NOTIF_ID, n)
     }
@@ -337,7 +342,7 @@ class DownloadService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
     }
 
-    private fun buildNotif(head: String, text: String, pct: Int): Notification {
+    private fun buildNotif(head: String, text: String, pct: Int, sub: String = ""): Notification {
         val cancelPi = PendingIntent.getService(
             this, 0,
             Intent(this, DownloadService::class.java).setAction(ACTION_CANCEL),
@@ -352,6 +357,7 @@ class DownloadService : Service() {
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle(head)
             .setContentText(text.ifBlank { null })
+            .setSubText(sub.ifBlank { null })
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .addAction(action)

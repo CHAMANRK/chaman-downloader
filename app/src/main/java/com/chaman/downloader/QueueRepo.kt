@@ -58,6 +58,17 @@ object QueueRepo {
         }
     }
 
+    /** App khulne par: pichli baar ke QUEUED items khud shuru (DB khulte hi purana RUNNING FAIL \"Interrupted\" ho jata hai). */
+    fun resumeQueued(ctx: Context) {
+        val app = ctx.applicationContext
+        scope.launch {
+            try {
+                if (AppDb.get(app).dao().queuedCount() > 0) kick(app)
+            } catch (t: Throwable) {
+            }
+        }
+    }
+
     /** QUEUED item seedha CANCELLED; chal raha ho to service ko cancel bolo. */
     fun cancel(ctx: Context, id: Long) {
         val app = ctx.applicationContext

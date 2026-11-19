@@ -65,6 +65,9 @@ interface DlDao {
 
     @Query("SELECT COUNT(*) FROM downloads WHERE status IN ('QUEUED', 'RUNNING')")
     fun activeCount(): Int
+
+    @Query("SELECT COUNT(*) FROM downloads WHERE status = 'QUEUED'")
+    fun queuedCount(): Int
 }
 
 @Database(entities = [DlItem::class], version = 1, exportSchema = false)
