@@ -39,6 +39,11 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 - **Release rule:** tag sirf backup hai, tag se release nahi banti. Sirf wo version release (latest) banta hai jo device pe pass ho chuka. Test builds release me nahi jate (ya `--pre`). Updater sirf latest normal release dekhta hai.
 
 ## Status
+## v0.4.26-updtest (2026-11-19) - SIRF version bump, updater ka popup/download/install raasta test karne ke liye (CODE LIKHA, device test pending)
+- Code v0.4.25 jaisa hi, sirf versionCode 31 aur versionName `0.4.26-updtest`. Koi feature nahi badla.
+- Test: v0.4.25 wale phone pe is release ke baad app kholo: popup `Naya version v0.4.26` > Update > progress > install screen > app 0.4.26 ban jaye. Popup na aaye to pehle 6 ghante wali throttle dekho (pichhli check "update nahi" aayi thi to 6 ghante tak dobara check nahi hota). Turant test ke liye app info > Storage > Clear data (welcome dobara aayega), ya 6 ghante ruko.
+- Pass hone par: tag v0.4.26 (release.sh ke liye tag zaroori) aur HANDOFF me "popup raasta device pe pass" mark.
+
 ## v0.4.25-update (2026-11-19) - Auto Update Check (device pe pass: checklist a, b, c, e; tag v0.4.25). PENDING: popup > download > install wala raasta (d) tab test hoga jab v0.4.25 se bada release bane
 - Kya bana: app start par ek baar GitHub `releases/latest` check (6 ghante me ek baar, jab update na ho; update mile to har start par). Naya version ho to popup `Naya version vX` [Update] [Baad me]. Update dabane par download (progress) > APK verify (same package, same signing key, versionCode bada) > system installer. Pre-release/draft ignore. Net/GitHub fail ho to chupchap kuch nahi. Settings me koi naya card nahi.
 - Version compare: release tag (`v0.4.25`) vs app `versionName` ka number hissa (`0.4.25-update` > `0.4.25`). Suffix ignore. Release asset ka naam exact `Chaman-Downloader.apk`.
