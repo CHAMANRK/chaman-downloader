@@ -180,8 +180,22 @@ fun HomeScreen(
         keyboard?.hide()
     }
 
+    // Har edit/clear/naye search pe badhta hai; purana search ka late result ignore hota hai
+    val searchGen = remember { IntArray(1) }
+
+    /** Paste ke baad auto-search: Share jaisa (download khud nahi), fail par chup (error card nahi). */
+    fun autoSearch(u: String) {
+        val my = ++searchGen[0]
+        scope.launch {
+            runSearch(u) { st ->
+                if (searchGen[0] == my) onInfo(if (st is InfoState.Err) InfoState.None else st)
+            }
+        }
+    }
+
     fun start(title: String, fmt: String) {
         DownloadState.currentTitle = title
+        DownloadState.sourceUrl = url.trim()
         ctx.startForegroundService(
             Intent(ctx, DownloadService::class.java)
                 .putExtra(DownloadService.EXTRA_URL, url.trim())
@@ -217,29 +231,42 @@ fun HomeScreen(
                 OutlinedTextField(
                     value = url,
                     onValueChange = {
-                        onUrl(normalizeLinkInput(url, it))
+                        val n = normalizeLinkInput(url, it)
+                        val pasted = looksLikePaste(url, it)
+                        searchGen[0]++
+                        onUrl(n)
                         if (info !is InfoState.None) onInfo(InfoState.None)
+                        // Keyboard paste: supported link ho to seedha search (chup rahe, download nahi)
+                        if (pasted && isAutoSearchUrl(n)) {
+                            closeKeyboard()
+                            autoSearch(n)
+                        }
                     },
                     label = { Text("Link") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = MaterialTheme.shapes.medium,
-                    trailingIcon = if (hasUrl) {
-                        {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .clickable {
-                                        onUrl("")
-                                        onInfo(InfoState.None)
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("\u2715", color = cs.onSurfaceVariant, fontSize = 16.sp)
+                    trailingIcon = {
+                        FieldActionButton(isClear = hasUrl, onClick = {
+                            if (hasUrl) {
+                                searchGen[0]++
+                                onUrl("")
+                                onInfo(InfoState.None)
+                            } else {
+                                // Clipboard sirf is user tap pe padha jata hai
+                                val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val t = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
+                                if (!t.isNullOrBlank()) {
+                                    searchGen[0]++
+                                    val n = normalizeLinkInput("", t.trim())
+                                    onUrl(n)
+                                    onInfo(InfoState.None)
+                                    if (isAutoSearchUrl(n)) autoSearch(n)
+                                }
+                                closeKeyboard()
                             }
-                        }
-                    } else null,
+                        })
+                    },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = cs.primary,
                         unfocusedBorderColor = cs.outline,
@@ -247,22 +274,12 @@ fun HomeScreen(
                         cursorColor = cs.primary
                     )
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    QuietButton("Paste", onClick = {
-                        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val t = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
-                        if (!t.isNullOrBlank()) {
-                            onUrl(normalizeLinkInput("", t.trim()))
-                            onInfo(InfoState.None)
-                        }
-                        closeKeyboard()
-                    }, modifier = Modifier.weight(1f), height = 54.dp)
-                    GoldButton("Search", onClick = {
-                        closeKeyboard()
-                        val u = url.trim()
-                        scope.launch { runSearch(u, onInfo) }
-                    }, modifier = Modifier.weight(1f), enabled = hasUrl && info !is InfoState.Loading)
-                }
+                GoldButton("Search", onClick = {
+                    closeKeyboard()
+                    val u = url.trim()
+                    val my = ++searchGen[0]
+                    scope.launch { runSearch(u) { if (searchGen[0] == my) onInfo(it) } }
+                }, enabled = hasUrl && info !is InfoState.Loading)
             }
 
             when (info) {

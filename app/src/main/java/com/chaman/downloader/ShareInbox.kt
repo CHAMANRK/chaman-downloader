@@ -39,3 +39,25 @@ fun normalizeLinkInput(prev: String, next: String): String {
     }
     return v.take(MAX_LINK_LEN)
 }
+
+/** Auto-search sirf in famous sites ke https link par chalta hai (baaki links Search button se). */
+private val AUTO_SEARCH_HOSTS = listOf(
+    "youtube.com", "youtu.be", "instagram.com", "facebook.com", "fb.watch", "fb.com",
+    "tiktok.com", "twitter.com", "x.com", "vimeo.com", "dailymotion.com", "reddit.com",
+    "twitch.tv", "soundcloud.com", "pinterest.com", "pin.it", "threads.net", "snapchat.com"
+)
+
+/** https link + famous site (host exact ya subdomain) ho to true. Paste ke baad auto-search ke liye. */
+fun isAutoSearchUrl(s: String): Boolean {
+    val t = s.trim()
+    if (t.isEmpty() || t.length > MAX_LINK_LEN || t.any { it.isWhitespace() }) return false
+    if (!t.startsWith("https://", ignoreCase = true)) return false
+    val host = t.substring(8)
+        .substringBefore('/').substringBefore('?').substringBefore('#')
+        .substringAfterLast('@').substringBefore(':').lowercase()
+    if (host.isEmpty()) return false
+    return AUTO_SEARCH_HOSTS.any { host == it || host.endsWith(".$it") }
+}
+
+/** Keyboard paste jaisa bada ek saath input (typing nahi). normalizeLinkInput wali hi 20 char limit. */
+fun looksLikePaste(prev: String, next: String): Boolean = next.length - prev.length > 20

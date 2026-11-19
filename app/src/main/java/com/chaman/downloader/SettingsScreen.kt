@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -35,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -98,20 +101,24 @@ fun SettingsScreen(
     ) {
         PageTitle("Settings")
 
+        // Compact list: har row 48dp+, patli divider
         LuxCard {
-            Text("Theme", style = MaterialTheme.typography.titleMedium)
-            listOf(
-                listOf(ThemeMode.SYSTEM to "System", ThemeMode.DARK to "Dark"),
-                listOf(ThemeMode.AMOLED to "AMOLED", ThemeMode.LIGHT to "Light")
-            ).forEach { rowItems ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    rowItems.forEach { (m, label) ->
+            // Theme: label + ek row me 4 chips
+            Column(modifier = Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Theme", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        ThemeMode.SYSTEM to "System",
+                        ThemeMode.DARK to "Dark",
+                        ThemeMode.AMOLED to "AMOLED",
+                        ThemeMode.LIGHT to "Light"
+                    ).forEach { (m, label) ->
                         val sel = m == mode
-                        val shape = RoundedCornerShape(22.dp)
+                        val shape = RoundedCornerShape(20.dp)
                         Surface(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(44.dp)
+                                .height(40.dp)
                                 .clip(shape)
                                 .clickable { onMode(m) },
                             shape = shape,
@@ -121,7 +128,8 @@ fun SettingsScreen(
                             Box(contentAlignment = Alignment.Center) {
                                 Text(
                                     label,
-                                    style = MaterialTheme.typography.labelLarge,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1,
                                     color = if (sel) cs.primary else cs.onSurfaceVariant
                                 )
                             }
@@ -129,43 +137,75 @@ fun SettingsScreen(
                     }
                 }
             }
-        }
 
-        if (!exempt) {
-            LuxCard {
-                Text("Background download", style = MaterialTheme.typography.titleMedium)
-                GoldButton("Exempt karo", onClick = {
-                    ctx.startActivity(
-                        Intent(
-                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                            Uri.parse("package:${ctx.packageName}")
-                        )
+            ThinDivider()
+
+            // Save folder: naam + compact Change; custom folder ho tabhi chhota Default
+            val custom = SaveFolder.treeUri(ctx) != null
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Save folder", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        saveLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = cs.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                })
-            }
-        }
-
-        LuxCard {
-            Text("Save folder", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "$saveLabel  (Video/ aur Audio/ andar khud bante hain)",
-                style = MaterialTheme.typography.bodyMedium,
-                color = cs.onSurfaceVariant
-            )
-            GoldButton("Folder chuno", onClick = { pickFolder.launch(null) })
-            if (SaveFolder.treeUri(ctx) != null) {
-                QuietButton("Default (Download/Chaman) pe wapas", onClick = {
-                    SaveFolder.treeUri(ctx)?.let { old ->
-                        try {
-                            ctx.contentResolver.releasePersistableUriPermission(
-                                old, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                            )
-                        } catch (e: Exception) {
+                }
+                if (custom) {
+                    SmallButton("Default", onClick = {
+                        SaveFolder.treeUri(ctx)?.let { old ->
+                            try {
+                                ctx.contentResolver.releasePersistableUriPermission(
+                                    old, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                                )
+                            } catch (e: Exception) {
+                            }
                         }
-                    }
-                    SaveFolder.set(ctx, null)
-                    saveLabel = SaveFolder.label(ctx)
-                })
+                        SaveFolder.set(ctx, null)
+                        saveLabel = SaveFolder.label(ctx)
+                    })
+                }
+                SmallButton("Change", onClick = { pickFolder.launch(null) }, filled = true)
+            }
+
+            if (!exempt) {
+                ThinDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Background download", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    SmallButton("Exempt karo", onClick = {
+                        ctx.startActivity(
+                            Intent(
+                                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                Uri.parse("package:${ctx.packageName}")
+                            )
+                        )
+                    }, filled = true)
+                }
+            }
+
+            ThinDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp)
+                    .clickable { onOpenDebug() },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Engine tests (Debug)", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                ChevronIcon(cs.onSurfaceVariant, Modifier.size(24.dp))
             }
         }
 
@@ -194,8 +234,6 @@ fun SettingsScreen(
                 }
             }
         }
-
-        QuietButton("Engine tests (Debug)", onClick = onOpenDebug)
 
         Column(
             modifier = Modifier.fillMaxWidth(),

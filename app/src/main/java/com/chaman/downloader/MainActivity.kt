@@ -73,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 
@@ -202,6 +203,10 @@ private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug:
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { TABS.size })
 
+    // Home ka link + search result (download PASS par clear hote hain)
+    var url by rememberSaveable { mutableStateOf("") }
+    var info by remember { mutableStateOf<InfoState>(InfoState.None) }
+
     // Download complete: haptic + chhota "Saved" snackbar (Open action)
     val snackbar = remember { SnackbarHostState() }
     val haptic = LocalHapticFeedback.current
@@ -213,6 +218,15 @@ private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug:
         if (was == DlStatus.RUNNING && dlStatus == DlStatus.PASS) {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             val canOpen = DownloadState.savedUri != null
+            // "Saved" + Open aane ke baad link field aur result clear (sirf jab field me wahi link ho jo download hua)
+            val doneUrl = DownloadState.sourceUrl
+            scope.launch {
+                delay(400)
+                if (doneUrl.isNotBlank() && url.trim() == doneUrl) {
+                    url = ""
+                    info = InfoState.None
+                }
+            }
             val r = snackbar.showSnackbar(
                 message = "Saved",
                 actionLabel = if (canOpen) "Open" else null,
@@ -234,9 +248,6 @@ private fun MainShell(mode: ThemeMode, onMode: (ThemeMode) -> Unit, onOpenDebug:
         }
         prevPage = p
     }
-
-    var url by rememberSaveable { mutableStateOf("") }
-    var info by remember { mutableStateOf<InfoState>(InfoState.None) }
 
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) {

@@ -1,7 +1,9 @@
 package com.chaman.downloader
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ShareTest {
@@ -44,5 +46,30 @@ class ShareTest {
     @Test fun newlineAndLengthCap() {
         assertEquals("a b", normalizeLinkInput("", "a\nb"))
         assertEquals(MAX_LINK_LEN, normalizeLinkInput("", "a".repeat(5000)).length)
+    }
+
+    @Test fun autoSearchFamousHttpsOnly() {
+        assertTrue(isAutoSearchUrl("https://youtu.be/q7nG6rCxbK4"))
+        assertTrue(isAutoSearchUrl("https://www.youtube.com/watch?v=abc"))
+        assertTrue(isAutoSearchUrl("https://m.facebook.com/watch/?v=1"))
+        assertTrue(isAutoSearchUrl("https://fb.watch/abc/"))
+        assertTrue(isAutoSearchUrl("https://www.instagram.com/reel/AbC/"))
+        assertTrue(isAutoSearchUrl("  https://x.com/a/status/1  "))
+    }
+
+    @Test fun autoSearchRejects() {
+        assertFalse(isAutoSearchUrl("http://youtu.be/abc"))
+        assertFalse(isAutoSearchUrl("https://evilyoutube.com/x"))
+        assertFalse(isAutoSearchUrl("https://youtube.com.evil.com/x"))
+        assertFalse(isAutoSearchUrl("https://example.com/video.mp4"))
+        assertFalse(isAutoSearchUrl("youtube.com/watch?v=1"))
+        assertFalse(isAutoSearchUrl("https://youtu.be/a b"))
+        assertFalse(isAutoSearchUrl(""))
+        assertFalse(isAutoSearchUrl("https://"))
+    }
+
+    @Test fun pasteDetection() {
+        assertTrue(looksLikePaste("", "https://youtu.be/abcdefghijk"))
+        assertFalse(looksLikePaste("https://you", "https://yout"))
     }
 }
