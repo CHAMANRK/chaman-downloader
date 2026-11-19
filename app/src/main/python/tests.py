@@ -579,3 +579,124 @@ def search(url):
 
 def download(url, outdir, cb, fmt=""):
     return _with_diag(url, _download_impl, url, outdir, cb, fmt)
+
+
+# ---------------- Step T: Speed test (Debug Test 7) ----------------
+_speed_cancel = False
+
+
+def speed_cancel(on=True):
+    """Kotlin Cancel button isse chalta speed_probe rokta hai."""
+    global _speed_cancel
+    _speed_cancel = bool(on)
+    return _speed_cancel
+
+
+def _peak_bps(samples, window=1.0):
+    """samples = [(t_sec, cumulative_bytes)]. Kam se kam `window` sec ke hisse me sabse tez speed (bytes/s)."""
+    best = 0.0
+    j = 0
+    n = len(samples)
+    for i in range(n):
+        ti, bi = samples[i]
+        while j < n and samples[j][0] - ti < window:
+            j += 1
+        if j >= n:
+            break
+        tj, bj = samples[j]
+        best = max(best, (bj - bi) / (tj - ti))
+    return best
+
+
+def speed_probe(url, outdir, seconds, frags, chunk):
+    """Ek hi video stream (video-only, bada) `seconds` tak download karke speed naapta hai, phir rokta hai.
+    frags = concurrent_fragment_downloads (sirf fragmented HLS/DASH me asar), chunk = http_chunk_size bytes (0 = default).
+    File cache me jati hai (Kotlin delete karta hai), save nahi hoti.
+    Returns JSON: client, bytes, secs, avg_bps, peak_bps, start_secs, cancelled.
+    """
+    import time
+    import yt_dlp
+
+    global _speed_cancel
+    _speed_cancel = False
+    base = {
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "noprogress": True,
+        "overwrites": True,
+        "socket_timeout": 30,
+        "retries": 3,
+        "fragment_retries": 3,
+        "format": "bv*[ext=mp4]/bv*",
+        "outtmpl": "%s/speedtest.%%(ext)s" % outdir,
+        "concurrent_fragment_downloads": max(1, int(frags)),
+    }
+    if chunk:
+        base["http_chunk_size"] = int(chunk)
+    base.update(_cookie_opts(url))
+
+    client_used = None
+    last_err = None
+    found = False
+    for c in _client_order(url):
+        try:
+            with yt_dlp.YoutubeDL(_with_client(dict(base, skip_download=True), c)) as ydl:
+                ydl.extract_info(url, download=False)
+            client_used = c
+            found = True
+            if _is_youtube(url) or _is_instagram(url):
+                _client_memo[url] = c
+            break
+        except yt_dlp.utils.YoutubeDLError as e:
+            last_err = e
+    if not found:
+        raise _friendly(last_err)
+
+    st = {"t0": None, "b0": 0, "samples": [], "stopped": False, "cancelled": False}
+    t_dl = time.time()
+
+    def hook(d):
+        if _speed_cancel:
+            st["stopped"] = True
+            st["cancelled"] = True
+            raise yt_dlp.utils.DownloadCancelled("speed test cancelled")
+        if st["stopped"]:
+            raise yt_dlp.utils.DownloadCancelled("speed test time up")
+        if d.get("status") != "downloading":
+            return
+        now = time.time()
+        done = d.get("downloaded_bytes") or 0
+        if st["t0"] is None:
+            st["t0"] = now
+            st["b0"] = done
+        t = now - st["t0"]
+        st["samples"].append((t, done - st["b0"]))
+        if t >= seconds:
+            st["stopped"] = True
+            raise yt_dlp.utils.DownloadCancelled("speed test time up")
+
+    try:
+        with yt_dlp.YoutubeDL(_with_client(dict(base, progress_hooks=[hook]), client_used)) as ydl:
+            ydl.extract_info(url, download=True)
+    except Exception as e:  # noqa: BLE001
+        if not st["stopped"]:
+            if isinstance(e, yt_dlp.utils.YoutubeDLError):
+                raise _friendly(e)
+            raise
+
+    samples = st["samples"]
+    if not samples:
+        raise RuntimeError("Koi data nahi aaya (download shuru hi nahi hua)")
+    t_last, b_last = samples[-1]
+    return json.dumps(
+        {
+            "client": client_used or "default",
+            "bytes": b_last,
+            "secs": t_last,
+            "avg_bps": (b_last / t_last) if t_last > 0 else 0.0,
+            "peak_bps": _peak_bps(samples),
+            "start_secs": (st["t0"] - t_dl) if st["t0"] else 0.0,
+            "cancelled": st["cancelled"],
+        }
+    )

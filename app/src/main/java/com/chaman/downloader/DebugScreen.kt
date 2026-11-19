@@ -92,6 +92,9 @@ fun TestScreen() {
     val t5 = remember { TestState("T5a FFmpeg version") }
     val t6 = remember { TestState("T5b FFmpeg convert") }
     val t7 = remember { TestState("T5c MP3 encoder") }
+    val t8 = remember { TestState("T7 Speed test") }
+    var speedBase by remember { mutableStateOf(SpeedTest.DEFAULT_BASE_URL) }
+    var speedUrl by remember { mutableStateOf("https://youtu.be/q7nG6rCxbK4") }
 
     var ytUrl by remember { mutableStateOf("https://www.youtube.com/watch?v=jNQXAC9IVRw") }
     var igUrl by remember { mutableStateOf("https://www.instagram.com/reel/DfzzfBLiVrH/") }
@@ -218,9 +221,56 @@ fun TestScreen() {
             }
         }
 
+        // ---- Step T: speed test ----
+        OutlinedTextField(
+            value = speedBase, onValueChange = { speedBase = it },
+            label = { Text("Speed test: network baseline URL") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true
+        )
+        OutlinedTextField(
+            value = speedUrl, onValueChange = { speedUrl = it },
+            label = { Text("Speed test: yt-dlp link") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true
+        )
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Test 7: Download speed", fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Text(t8.status.name, fontWeight = FontWeight.Bold)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                t8.status = Status.RUNNING
+                                t8.log = ""
+                                try {
+                                    withContext(Dispatchers.IO) {
+                                        SpeedTest.runAll(ctx.cacheDir, speedBase.trim(), speedUrl.trim()) { t8.log = it }
+                                    }
+                                    t8.status = Status.PASS
+                                } catch (e: Throwable) {
+                                    t8.log += "\nFAIL " + errText(e)
+                                    t8.status = Status.FAIL
+                                }
+                            }
+                        },
+                        enabled = t8.status != Status.RUNNING
+                    ) { Text("Run") }
+                    OutlinedButton(
+                        onClick = { SpeedTest.cancel() },
+                        enabled = t8.status == Status.RUNNING
+                    ) { Text("Cancel") }
+                }
+                if (t8.log.isNotEmpty()) {
+                    Text(t8.log, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                }
+            }
+        }
+
         OutlinedButton(
             onClick = {
-                val all = listOf(t1, t2, t3, t4, t5, t6)
+                val all = listOf(t1, t2, t3, t4, t5, t6, t8)
                     .joinToString("\n\n") { "${it.label} [${it.status}]\n${it.log}" } +
                     "\n\nT6 Background download [${DownloadState.status}]\nbattery_exempt=$ignoringBattery\n${DownloadState.log}"
                 val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
