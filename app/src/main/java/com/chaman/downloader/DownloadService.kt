@@ -89,6 +89,8 @@ class DownloadService : Service() {
 
         cancelRequested = false
         DownloadState.reset()
+        DownloadState.sourceUrl = url
+        DownloadState.sourceFmt = fmt
         if (title.isNotBlank()) DownloadState.currentTitle = title
         val nm = getSystemService(NotificationManager::class.java)
         nm.cancel(DONE_ID) // purana Done/Fail/Cancel notification hatao
@@ -147,6 +149,8 @@ class DownloadService : Service() {
                     src = File(outDir, json.getString("id") + ".mp3")
                     FfmpegProbe.toMp3(a, src)
                     a.delete()
+                    fun js(k: String) = if (json.isNull(k)) "" else json.optString(k, "")
+                    DownloadState.logLine(Cover.tagMp3(src, js("title"), js("uploader"), js("thumbnail")))
                 } else {
                     src = File(parts.getString(0))
                 }

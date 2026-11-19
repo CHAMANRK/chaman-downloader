@@ -1,6 +1,9 @@
 package com.chaman.downloader
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,6 +34,7 @@ fun QueueScreen(onOpenLibrary: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     var showLog by remember { mutableStateOf(false) }
     val st = DownloadState.status
+    val ctx = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -108,6 +112,23 @@ fun QueueScreen(onOpenLibrary: () -> Unit) {
 
                 if (st == DlStatus.PASS) {
                     GoldButton("Library me dekho", onClick = onOpenLibrary)
+                }
+
+                // FAIL / Cancel: Retry (wahi link + wahi quality) ya Quality badlo (link Home me, search, nayi quality chuno)
+                if ((st == DlStatus.FAIL || st == DlStatus.CANCELLED) && DownloadState.sourceUrl.isNotBlank()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GoldButton("Retry", onClick = {
+                            ctx.startForegroundService(
+                                Intent(ctx, DownloadService::class.java)
+                                    .putExtra(DownloadService.EXTRA_URL, DownloadState.sourceUrl)
+                                    .putExtra(DownloadService.EXTRA_FORMAT, DownloadState.sourceFmt)
+                                    .putExtra(DownloadService.EXTRA_TITLE, DownloadState.currentTitle)
+                            )
+                        }, modifier = Modifier.weight(1f))
+                        QuietButton("Quality badlo", onClick = {
+                            ShareInbox.pending = DownloadState.sourceUrl
+                        }, modifier = Modifier.weight(1f), height = 54.dp)
+                    }
                 }
 
                 TextButton(onClick = { showLog = !showLog }) {

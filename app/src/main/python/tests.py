@@ -299,7 +299,9 @@ def _download_impl(url, outdir, cb, fmt=""):
     return json.dumps(
         {"files": paths, "id": vid, "title": info.get("title") or vid, "merge_ext": merge_ext, "desc": desc,
          "has_video": any(f.get("vcodec") not in (None, "none") for f in reqs) and not to_mp3,
-         "to_mp3": to_mp3},
+         "to_mp3": to_mp3,
+         "uploader": info.get("uploader") or info.get("channel"),
+         "thumbnail": info.get("thumbnail")},
         ensure_ascii=False,
     )
 

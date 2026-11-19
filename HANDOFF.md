@@ -39,7 +39,13 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 - **Release rule:** tag sirf backup hai, tag se release nahi banti. Sirf wo version release (latest) banta hai jo device pe pass ho chuka. Test builds release me nahi jate (ya `--pre`). Updater sirf latest normal release dekhta hai.
 
 ## Status
-## v0.4.27-polish (2026-11-19) - UI/UX polish (CODE LIKHA, device test pending)
+## v0.4.28-cover (2026-11-19) - Queue Retry/Quality badlo + MP3 cover/tags (CODE LIKHA, device test pending; pichla v0.4.27 device pe pass, tag v0.4.27)
+- (1) Queue FAIL/CANCELLED card: do button `Retry` (wahi link + wahi quality, service ko wahi extras) aur `Quality badlo` (link Home me aata hai + search, `ShareInbox.pending` wala raasta; nayi quality chuno). `DownloadState.sourceUrl/sourceFmt` ab service khud set karta hai (Home se ya notification Retry se, dono me). Button sirf jab link yaad ho.
+- (2) MP3 me ID3v2.3 tags + cover: `Id3.kt` (pure: `buildTag` TIT2 title, TPE1 artist, APIC JPEG cover; `replaceTag` FFmpeg ka purana tag hata ke naya lagata hai), `Cover.kt` (thumbnail url fetch > BitmapFactory (webp bhi) > max 600px JPEG; `tagMp3` kuch bhi fail ho to sirf log, download fail nahi). FFmpeg me koi naya option nahi (cover FFmpeg se nahi, Kotlin se lagta hai, kyunki audio package me image muxing unverified). `tests.py` download JSON me `uploader` + `thumbnail` jode. Sirf mp3 ke liye (m4a/webm audio me nahi). Log me: `mp3 tags lage: title, artist, cover` ya wajah.
+- Unit test: `Id3Test.kt` (syncsafe, header, frame layout, cover, purana tag replace). versionCode 33.
+- Device test checklist: (a) YouTube video > Audio MP3 download; file kisi music player me kholo: title + artist + cover dikhe; Library me file normal; (b) log me `mp3 tags lage ...` line; (c) m4a/webm audio aur video download regression; (d) airplane mode me Download fail karao > Queue card: Retry (net on karke wahi quality se dobara chale), Quality badlo (Home khule, link bhara, search chale); (e) Cancel karo > wahi do button; (f) notification Retry bhi chale; (g) dark/AMOLED/light.
+
+## v0.4.27-polish (2026-11-19) - UI/UX polish (device pe pass, user ne confirm kiya; tag v0.4.27)
 - Koi naya feature nahi. Sirf Home + Settings polish (suggestion.md ke 6 point, user ke jawab ke saath).
 - Home: (1) Auto search on paste: Paste (field ke andar button) ya keyboard paste (ek saath 20+ char, `looksLikePaste`) ke baad link `isAutoSearchUrl` (ShareInbox.kt: sirf `https://` + famous host list: youtube/youtu.be, instagram, facebook/fb.watch, tiktok, x/twitter, vimeo, dailymotion, reddit, twitch, soundcloud, pinterest, threads, snapchat) ho to `runSearch` chalta hai. Download khud start nahi. Search fail ho to chup (InfoState.Err -> None, error card nahi); Search button se fail ho to card pehle jaisa. Clipboard sirf user ke Paste tap pe padhta hai. `searchGen` counter: edit/clear/naya search ke baad purane search ka late result ignore. (2) Download PASS par "Saved" snackbar aate hi (400 ms baad) link field + result clear (MainShell, sirf jab field me wahi link ho jo download hua: `DownloadState.sourceUrl`). FAIL/Cancel pe link rahta hai. Open action `savedUri` se chalta hai. (3) Paste aur X ek button (`FieldActionButton`, Ui.kt, Canvas icon): field khali = Paste icon, text = X. Alag Paste button hata; Search button full width.
 - Settings: ek LuxCard me compact rows + patli divider (`ThinDivider`). Theme: label + ek row me 4 chips (System/Dark/AMOLED/Light). Save folder row: naam + compact `Change` (`SmallButton`, 34dp pill, 48dp tap). `Default` chhota button SIRF jab custom folder chuna ho (option A); default hone par nahi dikhta. "Video/ aur Audio/ andar..." hint text hata diya. Battery row (exempt na ho tab) + "Engine tests (Debug)" row (chevron). Version + Made by Najeef pehle jaisa.
@@ -59,15 +65,15 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 - Device test checklist: (a) app normal khule, koi popup nahi (latest release v0.4.24 abhi isse chhota hai), koi crash nahi. (b) airplane mode me app khule: koi error/popup nahi. (c) YouTube/Instagram download regression. (d) Popup wala raasta tab test hoga jab koi isse bada release bane (next version release karke, v0.4.25 wale phone pe app kholo: popup > Update > progress > install screen > app naya version). (e) Download chalte waqt popup na aaye.
 - Pehla release: **v0.4.24** (device pe pass wala version) `scripts/release.sh v0.4.24 "..."` se. Updater is release me nahi hai, wo sirf v0.4.25+ me hai.
 
-## Push + tag + release commands (Termux, har version me yahi pattern)
+## Commands: kab konsa (har version me yahi pattern)
 Project folder: `~/test/chaman-downloader`. Zip `~/downloads` ya `/sdcard/Download` me aata hai.
-1. **Push (update zip):**
-`Z=chaman-downloader-v{X}.zip; D=~/downloads; [ -f $D/$Z ] || D=/sdcard/Download; mv $D/$Z ~/test && cd ~/test && unzip -o $Z && cd chaman-downloader && git add . && git commit -m "{Step + version + kya badla}" && git push`
-2. **Device pe pass hone par (user "pass" bole tab teeno ek saath dene hain):**
-   - Tag: `cd ~/test/chaman-downloader && git tag v{X} -m "{details}" && git push origin v{X}`
-   - Release (CI green hone ke baad): `cd ~/test/chaman-downloader && scripts/release.sh v{X} "{kya badla}"`
-   - Phone pe APK (GitHub browser se nahi khulta): `cd ~/test/chaman-downloader && gh release download v{X} -p Chaman-Downloader.apk -D /sdcard/Download --clobber && termux-open /sdcard/Download/Chaman-Downloader.apk`
-3. Tag ka number versionName ke number jaisa (v0.4.27 <-> `0.4.27-polish`).
+**A. Har naya zip dete hi (2 command ek saath): push + test APK phone me**
+1. Push: `Z=chaman-downloader-v{X}.zip; D=~/downloads; [ -f $D/$Z ] || D=/sdcard/Download; mv $D/$Z ~/test && cd ~/test && unzip -o $Z && cd chaman-downloader && git add . && git commit -m "{Step + version + kya badla}" && git push`
+2. Test APK (CI green hone ke baad; isi commit ki CI run ka APK): `cd ~/test/chaman-downloader && R=$(gh run list --workflow build.yml --commit $(git rev-parse HEAD) --status success -L 1 --json databaseId -q '.[0].databaseId') && [ -n "$R" ] && rm -rf ~/apkdl && gh run download $R -n chaman-downloader-debug -D ~/apkdl && cp ~/apkdl/chaman-downloader-debug.apk /sdcard/Download/Chaman-Downloader-test.apk && termux-open /sdcard/Download/Chaman-Downloader-test.apk` (R khali = CI abhi green nahi, thodi der baad dobara). Same key se signed, purane app ke upar install hota hai.
+**B. User "pass" bole tab (2 command): tag + release**
+3. Tag: `cd ~/test/chaman-downloader && git tag v{X} -m "{details}" && git push origin v{X}`
+4. Release (CI green ho): `cd ~/test/chaman-downloader && scripts/release.sh v{X} "{kya badla}"`
+- HANDOFF me us step ke aage "device pe pass" likhna. Tag number = versionName number (v0.4.27 <-> `0.4.27-polish`).
 
 ## Release set karne ka tarika (har baar yahi)
 1. Version device pe pass ho jaye. Tab `git tag v{X} -m "{details}" && git push origin v{X}` (backup).
@@ -192,3 +198,5 @@ User decision (is session): Queue card (2) aur Queue multi-item (3) abhi chhod d
 2. Step Q v0.4.25-update (Auto Update Check) + v0.4.26-updtest: device pe pass (popup, download, install sab). Step P + v0.4.24-parked: device pe pass. Step J, K, L: device pe pass. Step M v0.4.16-smartexc (device pe pass; v0.4.14 FAIL tha, missing smart-exception-java helper, v0.4.16 me fix). Step N v0.4.18-savefolder (folder + Video/Audio sub-dirs): device pe pass. Step O v0.4.19-cookies: handshake + reel/post cookies + Clear + log device pe pass; story link FAIL unresolved. v0.4.20-cookiediag + Step P: device pe pass (v0.4.24 me checklist pass). Ab v0.4.27-polish: code likha, device test pending.
 3. Chhode hue (user ne abhi nahi bola): Smart Paste chip, Queue card redesign, Queue multi-item, (Step C download folder select = pehle cancel, ab Step N me naye form me maanga), Phase 2+ (Room download manager), FFmpeg tools, Instagram/universal, optimization
 4. Known: YouTube fallback chain (tv/android_vr/web_embedded) unproven (bot-check dobara aaye to dekhna); mp3 Step M me bana, libmp3lame device pe verify hona baaki (Debug Test 5c); 1080p option kabhi Premium/m3u8 format chun sakta hai (abhi problem nahi aayi; aaye to https-only filter)
+5. **Planned (user ne concept diya, abhi nahi bana): Playlist.** Playlist link detect hone par option aaye: "Saare video" ya "Kuch video". Saare = poori playlist queue me. Kuch = user se `Start video N` aur `End video N` maange, phir shuru (N..M range). Build se pehle user se concept dobara confirm, aur Queue Room (multi-item) ke baad. Wi-Fi-only toggle user ne cancel kiya, nahi banana.
+6. Ideas jo user ne abhi nahi bole: fast download (`concurrent_fragment_downloads`, speed naap ke), Queue Room + Queue card redesign.

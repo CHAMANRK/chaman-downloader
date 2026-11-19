@@ -17,7 +17,8 @@ object DownloadState {
     var log by mutableStateOf("")
     var currentTitle by mutableStateOf("") // UI set karta hai (info title ya URL)
     var error by mutableStateOf("") // FAIL par chhota, padhne layak message (poora error log me)
-    @Volatile var sourceUrl: String = "" // Home ne jis link se download shuru kiya (PASS par field clear ke liye)
+    @Volatile var sourceUrl: String = "" // jis link ka download chala (PASS par field clear + Queue Retry ke liye)
+    @Volatile var sourceFmt: String = "" // uska format string (Retry me wahi quality)
     var savedUri by mutableStateOf<String?>(null) // PASS par MediaStore uri (snackbar "Open" ke liye)
     var savedMime by mutableStateOf("*/*")
     @Volatile var startedAt: Long = 0L
