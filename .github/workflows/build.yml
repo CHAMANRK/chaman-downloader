@@ -55,7 +55,7 @@ jobs:
             echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/chaman-release.jks"
             echo "CHAMAN_KEYSTORE_FILE=$RUNNER_TEMP/chaman-release.jks" >> "$GITHUB_ENV"
             echo "CHAMAN_KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
-            echo "CHAMAN_KEY_ALIAS=chaman" >> "$GITHUB_ENV"
+            echo "CHAMAN_KEY_ALIAS=androiddebugkey" >> "$GITHUB_ENV"
             echo "SIGNING=chaman permanent key" >> "$GITHUB_ENV"
           else
             echo "::warning::Signing secrets nahi mile, debug key use hogi (update ke liye uninstall lagega)"
