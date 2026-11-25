@@ -43,7 +43,11 @@ Build sirf GitHub Actions se (AGP 8.5.2, Kotlin 1.9.24, Gradle 8.7, JDK 17). Sir
 - **Release rule:** tag sirf backup hai, tag se release nahi banti. Sirf wo version release (latest) banta hai jo device pe pass ho chuka. Test builds release me nahi jate (ya `--pre`). Updater sirf latest normal release dekhta hai.
 
 ## Status
-## NOW: Task 2 chaman-link - v0.4.32-link (CODE LIKHA, device test pending; versionCode 38)
+## NOW: Task 2 chaman-link - v0.4.33-link (FIX LIKHA, device test pending; versionCode 39)
+- v0.4.32-link device test (Najeef, Nap 1.50000.0 se): link, confirm, ACK, call sab chala, par Downloader band (cold start) ho to RESULT fail `RuntimeException: Cannot use GenericPlatform on Android`. Wajah: bind se process bina Activity ke bana, Python.start sirf MainActivity me tha. App khula ho to chalta tha.
+- v0.4.33 fix: naya `ChamanApplication.kt` (Application subclass, `onCreate` me `if (!Python.isStarted()) Python.start(AndroidPlatform(this))`), manifest `<application android:name=".ChamanApp">`. MainActivity ka purana isStarted check waisa hi (harmless). Baaki code same.
+- Test: Downloader force-stop (Settings > App info > Force stop), phir Nap se `/App downloader <link>`: ACK, PROGRESS, RESULT done, file Library me. Phir app khula rakh ke bhi ek baar, aur normal app regression (Home download, Queue).
+- Neeche v0.4.32 ka poora description abhi bhi sahi hai (protocol, action, risks).
 - Base: v0.4.31-queue2 (DEVICE PE PASS, user ne confirm kiya) + commit f2db67a (CI master key se sign: alias `androiddebugkey`, secrets `CHAMAN_KEYSTORE_*`, tag signed-master-ok). v0.4.31 ka tag + release baaki ho to commands neeche.
 - Ye Chaman Link Pack (CONNECTOR.md contract v2) ka app side hai, pilot = Downloader. Pack ke md Najeef ke paas, source code shared nahi.
 - Naya package `com.chaman.link` (`app/src/main/java/com/chaman/link/`): `LinkCore.kt` + `LinkService.kt` generic (har app me same copy), `LinkApp.kt` sirf is app ka (info + actions list + `DownloadAction`). Naya action = `LinkApp.actions` me ek `LinkAction` object; manifest (actions + tools) usi list se banta hai.
