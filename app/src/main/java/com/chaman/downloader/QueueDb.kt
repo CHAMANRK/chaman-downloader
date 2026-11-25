@@ -68,6 +68,10 @@ interface DlDao {
 
     @Query("SELECT COUNT(*) FROM downloads WHERE status = 'QUEUED'")
     fun queuedCount(): Int
+
+    /** chaman-link: ek item ki ab ki halat (null = hata diya gaya). */
+    @Query("SELECT * FROM downloads WHERE id = :id")
+    fun get(id: Long): DlItem?
 }
 
 @Database(entities = [DlItem::class], version = 1, exportSchema = false)

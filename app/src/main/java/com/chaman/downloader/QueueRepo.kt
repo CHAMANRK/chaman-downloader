@@ -32,6 +32,19 @@ object QueueRepo {
         return d.activeCount()
     }
 
+    /** chaman-link ke liye: item line me daalo aur (id, line me number) do. Blocking (IO thread se bulao). */
+    fun enqueueWithId(ctx: Context, url: String, fmt: String, title: String, thumb: String): Pair<Long, Int> {
+        val d = AppDb.get(ctx).dao()
+        val id = d.insert(
+            DlItem(
+                url = url, fmt = fmt, title = title, thumb = thumb,
+                status = QStatus.QUEUED.name, progress = 0f, error = "",
+                savedUri = "", savedMime = "", addedAt = System.currentTimeMillis()
+            )
+        )
+        return id to d.activeCount()
+    }
+
     /** Service ko bolo ki line chalaye (chal rahi ho to bas jaag jaye). */
     fun kick(ctx: Context) {
         ctx.startForegroundService(

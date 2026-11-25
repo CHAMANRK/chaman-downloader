@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- chaman-link: sirf ek hi key se sign hue apps (ChamanNap) is service se bind kar sakte hain -->
+    <permission
+        android:name="com.chaman.permission.LINK"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="com.chaman.permission.LINK" />
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -43,6 +49,16 @@
             android:name=".DownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- chaman-link: hidden service, koi UI nahi (CONNECTOR.md section 3) -->
+        <service
+            android:name="com.chaman.link.LinkService"
+            android:exported="true"
+            android:permission="com.chaman.permission.LINK">
+            <intent-filter>
+                <action android:name="com.chaman.link.BIND" />
+            </intent-filter>
+        </service>
 
         <!-- Sirf downloaded Cookie Browser APK ko system installer ko dikhane ke liye -->
         <provider
